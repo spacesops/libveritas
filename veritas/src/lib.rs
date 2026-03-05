@@ -5,11 +5,10 @@ use libveritas_zk::guest::CommitmentKind;
 use risc0_zkvm::{Receipt, VerifierContext};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use spacedb::{Hash, NodeHasher, Sha256Hasher};
-use spaces_protocol::Bytes;
 use spaces_protocol::bitcoin::hashes::{Hash as HashUtil, sha256, HashEngine};
 use spaces_protocol::bitcoin::secp256k1::{self, XOnlyPublicKey};
 use spaces_protocol::bitcoin::{ScriptBuf};
-use spaces_protocol::constants::{ChainAnchor, SPACES_SIGNED_MSG_PREFIX};
+use spaces_protocol::constants::SPACES_SIGNED_MSG_PREFIX;
 use spaces_protocol::slabel::SLabel;
 use spaces_ptr::constants::COMMITMENT_FINALITY_INTERVAL;
 use std::collections::HashSet;
@@ -21,8 +20,10 @@ use crate::msg::OffchainData;
 
 pub mod cert;
 pub mod msg;
+pub mod records;
 pub mod sname;
 pub mod constants;
+pub mod builder;
 
 /// Result of verifying a message.
 ///
@@ -197,7 +198,7 @@ pub struct Zone {
     /// The current script pubkey that controls this handle.
     pub script_pubkey: ScriptBuf,
     /// Optional on-chain data associated with the handle.
-    pub data: Option<Bytes>,
+    pub data: Option<records::RawRecords>,
     /// Optional off-chain data signed by the handle owner
     pub offchain_data: Option<OffchainData>,
     /// Delegate information if the handle has delegated signing authority.
@@ -239,7 +240,7 @@ impl CommitmentInfo {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Delegate {
     pub script_pubkey: ScriptBuf,
-    pub data: Option<Bytes>,
+    pub data: Option<records::RawRecords>,
     pub offchain_data: Option<OffchainData>,
 }
 
@@ -280,7 +281,7 @@ impl BorshDeserialize for SovereigntyState {
 impl BorshSerialize for Delegate {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.data.clone().map(|b| b.to_vec()), writer)?;
+        BorshSerialize::serialize(&self.data, writer)?;
         BorshSerialize::serialize(&self.offchain_data, writer)
     }
 }
@@ -288,11 +289,11 @@ impl BorshSerialize for Delegate {
 impl BorshDeserialize for Delegate {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let data: Option<Vec<u8>> = Option::deserialize_reader(reader)?;
+        let data = Option::<records::RawRecords>::deserialize_reader(reader)?;
         let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
         Ok(Delegate {
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
-            data: data.map(Bytes::new),
+            data,
             offchain_data,
         })
     }
@@ -350,7 +351,7 @@ impl BorshSerialize for Zone {
         BorshSerialize::serialize(&self.sovereignty, writer)?;
         BorshSerialize::serialize(&self.handle, writer)?;
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.data.clone().map(|b| b.to_vec()), writer)?;
+        BorshSerialize::serialize(&self.data, writer)?;
         BorshSerialize::serialize(&self.offchain_data, writer)?;
         BorshSerialize::serialize(&self.delegate, writer)?;
         BorshSerialize::serialize(&self.commitment, writer)
@@ -363,7 +364,7 @@ impl BorshDeserialize for Zone {
         let sovereignty = SovereigntyState::deserialize_reader(reader)?;
         let handle = SName::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let data: Option<Vec<u8>> = Option::deserialize_reader(reader)?;
+        let data = Option::<records::RawRecords>::deserialize_reader(reader)?;
         let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
         let delegate: ProvableOption<Delegate> = ProvableOption::deserialize_reader(reader)?;
         let commitment: ProvableOption<CommitmentInfo> = ProvableOption::deserialize_reader(reader)?;
@@ -373,7 +374,7 @@ impl BorshDeserialize for Zone {
             sovereignty,
             handle,
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
-            data: data.map(Bytes::new),
+            data,
             offchain_data,
             delegate,
             commitment,
@@ -715,7 +716,7 @@ impl Veritas {
 
         for bundle in msg.spaces {
             let (bundle_zones, verified_bundle) =
-                self.verify_bundle(ctx, &msg.anchor, &msg.chain, bundle)?;
+                self.verify_bundle(ctx, &msg.chain, bundle)?;
             zones.extend(bundle_zones);
             if let Some(vb) = verified_bundle {
                 verified_bundles.push(vb);
@@ -725,7 +726,6 @@ impl Veritas {
         Ok(VerifiedMessage {
             zones,
             message: msg::Message {
-                anchor: msg.anchor,
                 chain: msg.chain,
                 spaces: verified_bundles,
             },
@@ -736,13 +736,12 @@ impl Veritas {
     fn verify_bundle(
         &self,
         ctx: &msg::QueryContext,
-        anchor: &ChainAnchor,
         chain: &msg::ChainProof,
         bundle: msg::Bundle,
     ) -> Result<(Vec<Zone>, Option<msg::Bundle>), MessageError> {
         let space = bundle.space.clone();
         let cached_parent = ctx.get_parent_zone(&space);
-        let mut extracted = self.extract_parent_zone(anchor, chain, &bundle)?;
+        let mut extracted = self.extract_parent_zone(chain, &bundle)?;
 
         let root_handle = SName::from_space(&space)
             .map_err(|_| MessageError::InvalidSubject { subject: space.to_string() })?;
@@ -848,9 +847,9 @@ impl Veritas {
                     if root != verified_tip.onchain.state_root {
                         return Err(MessageError::TemporaryRequiresTip { handle: subject.to_string() });
                     }
-                    verify_temporary_handle(anchor.height, &handle, &subject, &epoch.tree, target_zone)?
+                    verify_temporary_handle(chain.anchor.height, &handle, &subject, &epoch.tree, target_zone)?
                 } else {
-                    verify_final_handle(anchor.height, &handle, &subject, &epoch.tree, &chain.ptrs, sovereignty)?
+                    verify_final_handle(chain.anchor.height, &handle, &subject, &epoch.tree, &chain.ptrs, sovereignty)?
                 };
 
                 push_best_zone(ctx, &mut zones, zone);
@@ -885,7 +884,7 @@ impl Veritas {
         &self,
         msg: &crate::msg::Message,
     ) -> Result<RootAnchor, MessageError> {
-        let height = msg.anchor.height;
+        let height = msg.chain.anchor.height;
 
         if height < self.oldest_anchor {
             return Err(MessageError::AnchorStale {
@@ -904,11 +903,11 @@ impl Veritas {
             .ok_or(MessageError::NoAnchorAtHeight { anchor: height })?
             .clone();
 
-        if msg.anchor.hash != anchor.block.hash {
+        if msg.chain.anchor.hash != anchor.block.hash {
             return Err(MessageError::AnchorHashMismatch {
                 height,
                 expected: anchor.block.hash.to_byte_array(),
-                got: msg.anchor.hash.to_byte_array(),
+                got: msg.chain.anchor.hash.to_byte_array(),
             });
         }
 
@@ -971,14 +970,38 @@ impl Veritas {
     }
 
     /// Extract parent zone from chain proofs and set sovereignty based on commitment finality.
-    fn extract_parent_zone(&self, anchor: &ChainAnchor, chain: &msg::ChainProof, bundle: &msg::Bundle) -> Result<Option<Zone>, MessageError> {
+    fn extract_parent_zone(&self, chain: &msg::ChainProof, bundle: &msg::Bundle) -> Result<Option<Zone>, MessageError> {
+        if bundle.space.is_numeric() {
+            let Some(ptrout) = chain.ptrs
+                .find_numeric(&bundle.space.clone().try_into().expect("numeric"))
+                .ok().flatten() else {
+                return Err(MessageError::NumericNotFound { numeric: bundle.space.to_string() })
+            };
+
+            let handle = SName::from_space(&bundle.space)
+                .map_err(|_| MessageError::InvalidSubject { subject: bundle.space.to_string() })?;
+            let z = Zone {
+                anchor: chain.anchor.height,
+                sovereignty: SovereigntyState::Sovereign,
+                handle,
+                script_pubkey: ptrout.script_pubkey,
+                data: ptrout.sptr.data
+                    .filter(|d| !d.is_empty())
+                    .map(|d| records::RawRecords::from_bytes(d.as_slice()).expect("non-empty")),
+                offchain_data: bundle.offchain_data.clone(),
+                delegate: ProvableOption::Empty,
+                commitment: ProvableOption::Empty,
+            };
+            return Ok(Some(z));
+        }
+
         let Some(spaceout) = chain.spaces.find_space(&bundle.space) else {
             return Err(MessageError::SpaceNotFound { space: bundle.space.to_string() })
         };
         let handle = SName::from_space(&bundle.space)
             .map_err(|_| MessageError::InvalidSubject { subject: bundle.space.to_string() })?;
         let mut z = Zone {
-            anchor: anchor.height,
+            anchor: chain.anchor.height,
             sovereignty: SovereigntyState::Sovereign,
             handle,
             script_pubkey: Default::default(),
@@ -991,7 +1014,9 @@ impl Veritas {
             return Err(MessageError::SpaceNotFound { space: bundle.space.to_string() });
         };
 
-        z.data = space.data().map(|d| Bytes::new(d.to_vec()));
+        z.data = space.data()
+            .filter(|d| !d.is_empty())
+            .map(|d| records::RawRecords::from_bytes(d).expect("non-empty"));
         z.script_pubkey = spaceout.script_pubkey.clone();
         z.offchain_data = bundle.offchain_data.clone();
 
@@ -1008,22 +1033,22 @@ impl Veritas {
             match delegate {
                 None => z.delegate = ProvableOption::Empty,
                 Some(delegate) => {
-                    if let Some(ptr) = delegate.sptr {
-                        let delegate_offchain = bundle.delegate_offchain_data.clone();
-                        if let Some(offchain) = &delegate_offchain {
-                            offchain.verify(&delegate.script_pubkey)
-                                .map_err(|e| MessageError::OffchainDataInvalid {
-                                    handle: z.handle.to_string(),
-                                    reason: e.to_string(),
-                                })?;
-                        }
-                        z.delegate = ProvableOption::Exists {
-                            value: Delegate {
-                                script_pubkey: delegate.script_pubkey,
-                                data: ptr.data,
-                                offchain_data: delegate_offchain,
-                            },
-                        }
+                    let delegate_offchain = bundle.delegate_offchain_data.clone();
+                    if let Some(offchain) = &delegate_offchain {
+                        offchain.verify(&delegate.script_pubkey)
+                            .map_err(|e| MessageError::OffchainDataInvalid {
+                                handle: z.handle.to_string(),
+                                reason: e.to_string(),
+                            })?;
+                    }
+                    z.delegate = ProvableOption::Exists {
+                        value: Delegate {
+                            script_pubkey: delegate.script_pubkey,
+                            data: delegate.sptr.data
+                                .filter(|d| !d.is_empty())
+                                .map(|d| records::RawRecords::from_bytes(d.as_slice()).expect("non-empty")),
+                            offchain_data: delegate_offchain,
+                        },
                     }
                 }
             }
@@ -1142,7 +1167,9 @@ fn verify_final_handle(
     let (spk, onchain_data) = match ptrout {
         Some(ptrout) => (
             ptrout.script_pubkey,
-            ptrout.sptr.and_then(|sptr| sptr.data),
+            ptrout.sptr.data
+                .filter(|d| !d.is_empty())
+                .map(|d| records::RawRecords::from_bytes(d.as_slice()).expect("non-empty")),
         ),
         None => (handle.genesis_spk.clone(), None),
     };
@@ -1194,6 +1221,8 @@ pub enum MessageError {
     PtrsRootMismatch { expected: Option<Hash>, got: Hash },
     /// Space not found in spaces proof
     SpaceNotFound { space: String },
+    /// Numeric space not found in ptrs proof
+    NumericNotFound { numeric: String },
     /// Commitment not found in ptrs proof
     CommitmentNotFound { space: String, root: Hash },
     /// Receipt required but not provided
@@ -1278,6 +1307,9 @@ impl fmt::Display for MessageError {
             }
             Self::SpaceNotFound { space } => {
                 write!(f, "space {} not found in proof", space)
+            }
+            Self::NumericNotFound { numeric } => {
+                write!(f, "numeric space {} not found in proof", numeric)
             }
             Self::CommitmentNotFound { space, root } => {
                 write!(f, "commitment {} not found for {}", hex::encode(root), space)

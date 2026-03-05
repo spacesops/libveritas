@@ -13,6 +13,7 @@ use spaces_protocol::slabel::SLabel;
 use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
 use spaces_ptr::sptr::Sptr;
 use spaces_ptr::{rolling_hash, CommitmentKey, FullPtrOut, Ptr, PtrOut, PtrOutpointKey, RegistryKey, RegistrySptrKey, RootAnchor};
+use spaces_ptr::snumeric::SNumeric;
 use std::collections::HashMap;
 use std::str::FromStr;
 use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
@@ -156,11 +157,12 @@ impl TestPtr {
             txid,
             ptrout: PtrOut {
                 n: n as usize,
-                sptr: Some(Ptr {
+                sptr: Ptr {
                     id: sptr,
+                    numeric: SNumeric::new(0, 0),
                     data: None,
                     last_update: block_height,
-                }),
+                },
                 value: Default::default(),
                 script_pubkey,
             },
@@ -170,7 +172,7 @@ impl TestPtr {
     }
 
     pub fn sptr(&self) -> Sptr {
-        self.fso.ptrout.sptr.as_ref().expect("valid").id.clone()
+        self.fso.ptrout.sptr.id.clone()
     }
 
     pub fn outpoint_key(&self) -> PtrOutpointKey {
@@ -582,8 +584,8 @@ impl TestHandleTree {
 
         // --- Build message ---
         Message {
-            anchor: anchor.clone(),
             chain: msg::ChainProof {
+                anchor: anchor.clone(),
                 spaces: SpacesSubtree(spaces_proof),
                 ptrs: PtrsSubtree(ptrs_proof),
             },
@@ -649,8 +651,8 @@ impl TestHandleTree {
             .expect("prove handles exclusion");
 
         Message {
-            anchor: anchor.clone(),
             chain: msg::ChainProof {
+                anchor: anchor.clone(),
                 spaces: SpacesSubtree(spaces_proof),
                 ptrs: PtrsSubtree(ptrs_proof),
             },

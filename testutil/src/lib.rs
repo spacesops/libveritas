@@ -15,6 +15,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use libveritas::cert::{HandleSubtree, KeyHash, PtrsSubtree, Signature, SpacesSubtree};
 use libveritas::msg::{self, ChainProof, Message, OffchainData};
 use libveritas::sname::{Label, SName};
+use libveritas::records::RawRecords;
 use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
 use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
 use spacedb::Sha256Hasher;
@@ -22,12 +23,13 @@ use spacedb::subtree::{ProofType, SubTree, ValueOrHash};
 use spaces_protocol::constants::{ChainAnchor};
 use spaces_protocol::hasher::{KeyHasher, OutpointKey, SpaceKey};
 use spaces_protocol::slabel::SLabel;
-use spaces_protocol::{Bytes, Covenant, FullSpaceOut, Space, SpaceOut};
+use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
 use spaces_ptr::sptr::Sptr;
 use spaces_ptr::{
     CommitmentKey, FullPtrOut, Ptr, PtrOut, PtrOutpointKey, RegistryKey, RegistrySptrKey,
     RootAnchor, rolling_hash,
 };
+use spaces_ptr::snumeric::SNumeric;
 use std::collections::HashMap;
 use std::str::FromStr;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -214,11 +216,12 @@ impl TestPtr {
             txid,
             ptrout: PtrOut {
                 n: n as usize,
-                sptr: Some(Ptr {
+                sptr: Ptr {
                     id: sptr,
+                    numeric: SNumeric::new(0, 0),
                     data: None,
                     last_update: block_height,
-                }),
+                },
                 value: Default::default(),
                 script_pubkey,
             },
@@ -228,7 +231,7 @@ impl TestPtr {
     }
 
     pub fn sptr(&self) -> Sptr {
-        self.fso.ptrout.sptr.as_ref().expect("valid").id.clone()
+        self.fso.ptrout.sptr.id.clone()
     }
 
     pub fn outpoint_key(&self) -> PtrOutpointKey {
@@ -268,8 +271,9 @@ impl TestChain {
         }
     }
 
-    pub fn chain_proof(&self) -> ChainProof {
+    pub fn chain_proof(&self, anchor: &ChainAnchor) -> ChainProof {
         ChainProof {
+            anchor: anchor.clone(),
             spaces: SpacesSubtree(self.spaces_tree.clone()),
             ptrs: PtrsSubtree(self.ptrs_tree.clone()),
         }
@@ -472,14 +476,14 @@ pub struct TestHandleTree {
 }
 
 impl TestHandle {
-    pub fn set_offchain_data(&mut self, seq: u32, data: &[u8]) {
-        let mut data = OffchainData {
+    pub fn set_offchain_data(&mut self, seq: u32, data: RawRecords) {
+        let mut od = OffchainData {
             seq,
-            data: Bytes::new(data.to_vec()),
+            data,
             signature: Signature([0u8; 64]),
         };
-        data.signature = sign_mesage(&data.signing_bytes(), &self.keypair);
-        self.offchain_data = Some(data);
+        od.signature = sign_mesage(&od.signing_bytes(), &self.keypair);
+        self.offchain_data = Some(od);
     }
 }
 
@@ -643,8 +647,8 @@ impl TestHandleTree {
             .expect("prove handles");
 
         Message {
-            anchor: anchor.clone(),
             chain: msg::ChainProof {
+                anchor: anchor.clone(),
                 spaces: SpacesSubtree(spaces_proof),
                 ptrs: PtrsSubtree(ptrs_proof),
             },
@@ -705,8 +709,8 @@ impl TestHandleTree {
             .expect("prove handles exclusion");
 
         Message {
-            anchor: anchor.clone(),
             chain: msg::ChainProof {
+                anchor: anchor.clone(),
                 spaces: SpacesSubtree(spaces_proof),
                 ptrs: PtrsSubtree(ptrs_proof),
             },

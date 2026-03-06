@@ -213,13 +213,18 @@ impl Display for SName {
 
         let last_label = labels.last().unwrap();
         let all_but_last = &labels[..labels.len() - 1];
-        write!(f, "{}@{}", all_but_last.join("."), last_label)
+        if last_label.starts_with('#') {
+            // Numeric space: "alice#12-12" or "#12-12"
+            write!(f, "{}{}", all_but_last.join("."), last_label)
+        } else {
+            write!(f, "{}@{}", all_but_last.join("."), last_label)
+        }
     }
 }
 
 impl Display for SNameRef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.to_owned())
     }
 }
 
@@ -235,13 +240,24 @@ impl TryFrom<&str> for SName {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let (subspace, space) = value
-            .split_once('@')
-            .ok_or(Error::Malformed)?;
-
-        if space.is_empty() || space.contains('.') {
+        // Determine separator: @ for named spaces, # for numeric spaces
+        let (subspace, space) = if let Some(at_pos) = value.find('@') {
+            let (sub, rest) = value.split_at(at_pos);
+            let space = &rest[1..]; // skip '@'
+            if space.is_empty() || space.contains('.') {
+                return Err(Error::Malformed);
+            }
+            (sub, space)
+        } else if let Some(hash_pos) = value.find('#') {
+            let (sub, space) = value.split_at(hash_pos);
+            // space includes '#', e.g. "#12-12"
+            if space.len() <= 1 || space[1..].contains('#') || space.contains('.') {
+                return Err(Error::Malformed);
+            }
+            (sub, space)
+        } else {
             return Err(Error::Malformed);
-        }
+        };
 
         let mut space_bytes = [0; MAX_SPACE_LEN];
         let mut space_len = 0;
@@ -562,6 +578,36 @@ mod tests {
         assert!(SName::from_str("@123").is_ok());
         assert!(SName::from_str("456@123").is_ok());
         assert!(SName::from_str("a1b2@c3d4").is_ok());
+    }
+
+    #[test]
+    fn test_numeric_spaces() {
+        assert!(SName::from_str("#12-12").is_ok());
+        assert!(SName::from_str("alice#12-12").is_ok());
+        assert!(SName::from_str("key.wallet#800000-3").is_ok());
+
+        // Invalid numeric formats
+        assert!(SName::from_str("#").is_err());
+        assert!(SName::from_str("#12-12#3-4").is_err());
+
+        // Display format
+        let root = SName::from_str("#12-12").unwrap();
+        assert_eq!(root.to_string(), "#12-12");
+        assert_eq!(root.label_count(), 1);
+
+        let handle = SName::from_str("alice#12-12").unwrap();
+        assert_eq!(handle.to_string(), "alice#12-12");
+        assert_eq!(handle.label_count(), 2);
+
+        let deep = SName::from_str("key.wallet#800000-3").unwrap();
+        assert_eq!(deep.to_string(), "key.wallet#800000-3");
+        assert_eq!(deep.label_count(), 3);
+
+        // space() and subspace()
+        assert!(root.space().unwrap().is_numeric());
+        assert!(root.subspace().is_none());
+        assert!(handle.space().unwrap().is_numeric());
+        assert_eq!(handle.subspace().unwrap().to_string(), "alice");
     }
 
     #[test]

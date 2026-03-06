@@ -20,7 +20,7 @@ import (
 
 func main() {
     // Load trust anchors
-    anchors, err := veritas.VeritasAnchorsFromJson(anchorsJsonString)
+    anchors, err := veritas.AnchorsFromJson(anchorsJsonString)
     if err != nil {
         panic(err)
     }
@@ -33,7 +33,7 @@ func main() {
     fmt.Printf("Anchors: %d .. %d\n", v.OldestAnchor(), v.NewestAnchor())
 
     // Build query context (empty = verify all handles)
-    ctx := veritas.NewVeritasQueryContext()
+    ctx := veritas.NewQueryContext()
 
     // Verify a message
     result, err := v.VerifyMessage(ctx, messageBytes)

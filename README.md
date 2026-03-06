@@ -104,10 +104,10 @@ import Libveritas
 let anchorsJson = try String(contentsOfFile: "trust_anchors.json", encoding: .utf8)
 let msg = try Data(contentsOf: URL(fileURLWithPath: "message.bin"))
 
-let anchors = try VeritasAnchors.fromJson(json: anchorsJson)
+let anchors = try Anchors.fromJson(json: anchorsJson)
 let veritas = try Veritas(anchors: anchors, devMode: false)
 
-let ctx = VeritasQueryContext()
+let ctx = QueryContext()
 let result = try veritas.verifyMessage(ctx: ctx, msg: msg)
 
 for zone in result.zones() {
@@ -132,21 +132,21 @@ import uniffi.libveritas_uniffi.*
 val anchorsJson = File("trust_anchors.json").readText()
 val msg = File("message.bin").readBytes()
 
-val anchors = VeritasAnchors.fromJson(anchorsJson)
+val anchors = Anchors.fromJson(anchorsJson)
 val veritas = Veritas(anchors, devMode = false)
 
-val ctx = VeritasQueryContext()
+val ctx = QueryContext()
 val result = veritas.verifyMessage(ctx, msg)
 
 for (zone in result.zones()) {
     println("${zone.handle()} -> ${zone.sovereignty()}")
 
     when (val c = zone.commitment()) {
-        is VeritasCommitmentState.Exists ->
+        is CommitmentState.Exists ->
             println("  commitment at block ${c.blockHeight}")
-        is VeritasCommitmentState.Empty ->
+        is CommitmentState.Empty ->
             println("  no commitment")
-        is VeritasCommitmentState.Unknown ->
+        is CommitmentState.Unknown ->
             println("  commitment unknown")
     }
 }
@@ -157,14 +157,14 @@ for (zone in result.zones()) {
 ```typescript
 import {
   Veritas,
-  VeritasAnchors,
-  VeritasQueryContext,
+  Anchors,
+  QueryContext,
 } from '@spacesprotocol/react-native-libveritas';
 
-const anchors = VeritasAnchors.fromJson(anchorsJsonString);
+const anchors = Anchors.fromJson(anchorsJsonString);
 const veritas = new Veritas(anchors, false);
 
-const ctx = new VeritasQueryContext();
+const ctx = new QueryContext();
 const result = veritas.verifyMessage(ctx, messageBytes);
 
 for (const zone of result.zones()) {
@@ -175,12 +175,12 @@ for (const zone of result.zones()) {
 ### Python
 
 ```python
-from libveritas import VeritasAnchors, Veritas, VeritasQueryContext
+from libveritas import Anchors, Veritas, QueryContext
 
-anchors = VeritasAnchors.from_json(anchors_json_string)
+anchors = Anchors.from_json(anchors_json_string)
 veritas = Veritas(anchors, dev_mode=False)
 
-ctx = VeritasQueryContext()
+ctx = QueryContext()
 result = veritas.verify_message(ctx, message_bytes)
 
 for zone in result.zones():
@@ -192,10 +192,10 @@ for zone in result.zones():
 ```go
 import veritas "github.com/spacesprotocol/libveritas-go"
 
-anchors, _ := veritas.VeritasAnchorsFromJson(anchorsJsonString)
+anchors, _ := veritas.AnchorsFromJson(anchorsJsonString)
 v, _ := veritas.NewVeritas(anchors, false)
 
-ctx := veritas.NewVeritasQueryContext()
+ctx := veritas.NewQueryContext()
 result, _ := v.VerifyMessage(ctx, messageBytes)
 
 for _, zone := range result.Zones() {

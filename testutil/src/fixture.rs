@@ -4,6 +4,7 @@ use spaces_ptr::RootAnchor;
 use libveritas::{msg, SovereigntyState, Veritas};
 use libveritas::cert::{HandleSubtree, PtrsSubtree, SpacesSubtree};
 use libveritas::msg::{Bundle, ChainProof};
+use libveritas::records::RawRecords;
 use crate::{TestChain, TestDelegatedSpace, TestHandleTree};
 
 #[derive(Clone,Debug)]
@@ -174,8 +175,8 @@ impl ChainState {
 
     pub fn message(&self, bundles: Vec<Bundle>) -> msg::Message {
         msg::Message {
-            anchor: self.chain.current_root_anchor().block,
             chain: ChainProof {
+                anchor: self.chain.current_root_anchor().block,
                 spaces: SpacesSubtree(self.chain.spaces_tree.clone()),
                 ptrs: PtrsSubtree(self.chain.ptrs_tree.clone()),
             },
@@ -225,7 +226,7 @@ impl FixtureRunner {
                 // Add some off-chain data
                 handle.set_offchain_data(
                     0,
-                    handle.name.as_slabel().clone().as_ref()
+                    RawRecords::new(0, handle.name.as_slabel().as_ref().to_vec()),
                 );
 
                 epoch.handles.push(msg::Handle {
@@ -248,7 +249,7 @@ impl FixtureRunner {
             // add some off-chain data
             staged.handle.set_offchain_data(
                 0,
-                staged.handle.name.as_slabel().clone().as_ref()
+                RawRecords::new(0, staged.handle.name.as_slabel().as_ref().to_vec()),
             );
             staging.handles.push(msg::Handle {
                 name: staged.handle.name.clone(),

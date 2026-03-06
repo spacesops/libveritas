@@ -10,7 +10,7 @@ use spaces_protocol::bitcoin::ScriptBuf;
 use spaces_protocol::hasher::{KeyHasher, OutpointKey};
 use spaces_protocol::slabel::SLabel;
 use spaces_protocol::SpaceOut;
-use spaces_ptr::{ChainProofRequest, Commitment, CommitmentKey, PtrKeyKind, PtrOut, RegistryKey};
+use spaces_ptr::{snumeric::SNumeric, ChainProofRequest, Commitment, CommitmentKey, NumericKey, PtrKeyKind, PtrOut, RegistryKey};
 use spaces_ptr::sptr::Sptr;
 use crate::sname::{Label, SName};
 
@@ -130,10 +130,15 @@ pub trait ChainProofRequestUtils {
     fn from_certificates<'a>(certs: impl Iterator<Item = &'a Certificate>) -> Self;
 
     fn add_subtree(&mut self, space: &SLabel, handles: &HandleSubtree);
+
+    fn add_space(&mut self, space: SLabel);
+
+    fn add_sptr(&mut self, sptr: Sptr);
+
+    fn add_numeric(&mut self, numeric: SNumeric);
 }
 
 impl ChainProofRequestUtils for ChainProofRequest {
-
     /// Add keys needed to verify a certificate.
     fn add(&mut self, cert: &Certificate) {
         let Some(space) = cert.subject.space() else {
@@ -221,6 +226,24 @@ impl ChainProofRequestUtils for ChainProofRequest {
             }
         }
     }
+
+    fn add_space(&mut self, space: SLabel) {
+        if space.is_numeric() {
+            let numeric : SNumeric = space.try_into().expect("valid numeric");
+            self.ptrs_keys.push(PtrKeyKind::Numeric(numeric));
+            return;
+        }
+
+        self.spaces.push(space);
+    }
+
+    fn add_sptr(&mut self, sptr: Sptr) {
+        self.ptrs_keys.push(PtrKeyKind::Sptr(sptr));
+    }
+
+    fn add_numeric(&mut self, numeric: SNumeric) {
+       self.ptrs_keys.push(PtrKeyKind::Numeric(numeric));
+    }
 }
 
 /// A 64-byte Schnorr signature.
@@ -270,6 +293,15 @@ pub enum PtrsValue {
 
 
 impl HandleSubtree {
+    pub fn empty() -> Self {
+        Self(SubTree::empty())
+    }
+
+    pub fn merge(self, other: Self) -> Result<Self, spacedb::Error> {
+        let subtree = self.0.merge(other.0.clone())?;
+        Ok(Self(subtree))
+    }
+
     pub fn compute_root(&self) -> Result<Hash, SubtreeError> {
         Ok(self.0.compute_root()?)
     }
@@ -300,6 +332,15 @@ impl KeyHasher for KeyHash {
 }
 
 impl SpacesSubtree {
+    pub fn empty() -> Self {
+        Self(SubTree::empty())
+    }
+
+    pub fn merge(self, other: Self) -> Result<Self, spacedb::Error> {
+        let subtree = self.0.merge(other.0.clone())?;
+        Ok(Self(subtree))
+    }
+
     pub fn iter(&self) -> SpacesIter<'_> {
         SpacesIter {
             inner: self.0.iter(),
@@ -342,6 +383,15 @@ impl SpacesSubtree {
 }
 
 impl PtrsSubtree {
+    pub fn empty() -> Self {
+        Self(SubTree::empty())
+    }
+
+    pub fn merge(self, other: Self) -> Result<Self, spacedb::Error> {
+        let subtree = self.0.merge(other.0.clone())?;
+        Ok(Self(subtree))
+    }
+
     pub fn iter(&self) -> PtrsIter<'_> {
         PtrsIter {
             inner: self.0.iter(),
@@ -414,6 +464,36 @@ impl PtrsSubtree {
         }
     }
 
+    /// Finds a PtrOut by its numeric.
+    ///
+    /// Returns:
+    /// - `Ok(Some(ptrout))` if found
+    /// - `Ok(None)` if provably not in tree
+    /// - `Err` if proof is malformed or incomplete
+    pub fn find_numeric(&self, numeric: &SNumeric) -> Result<Option<PtrOut>, SubtreeError> {
+        // Search for UTXO containing this sptr. We iterate rather than doing a direct
+        // key lookup to avoid requiring an additional sptr->outpoint leaf in the proof.
+        for (_, value) in self.iter() {
+            if let PtrsValue::UTXO(ptrout) = value {
+                if &ptrout.sptr.numeric == numeric {
+                    return Ok(Some(ptrout));
+                }
+            }
+        }
+
+        let numeric : Hash = NumericKey::from_numeric::<KeyHash>(numeric).into();
+
+        // Not found in UTXOs - verify the sptr provably doesn't exist.
+        // If contains() returns true, the proof is incomplete (has sptr key but missing UTXO).
+        if self.0.contains(&numeric)? {
+            return Err(SubtreeError::IncompleteProof {
+                reason: "numeric key present but UTXO leaf missing".to_string(),
+            });
+        }
+
+        Ok(None)
+    }
+
     /// Finds a PtrOut by its genesis SPK.
     ///
     /// Returns:
@@ -427,7 +507,7 @@ impl PtrsSubtree {
         // key lookup to avoid requiring an additional sptr->outpoint leaf in the proof.
         for (_, value) in self.iter() {
             if let PtrsValue::UTXO(ptrout) = value {
-                if ptrout.sptr.as_ref().is_some_and(|ptr| ptr.id == sptr) {
+                if ptrout.sptr.id == sptr {
                     return Ok(Some(ptrout));
                 }
             }

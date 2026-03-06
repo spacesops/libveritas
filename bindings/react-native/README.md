@@ -18,21 +18,23 @@ cd ios && pod install
 
 ## Usage
 
+### Verifying a message
+
 ```typescript
 import {
   Veritas,
-  VeritasAnchors,
-  VeritasQueryContext,
+  Anchors,
+  QueryContext,
 } from '@spacesprotocol/react-native-libveritas';
 
-// Load trust anchors (e.g. fetched from a relay)
-const anchors = VeritasAnchors.fromJson(anchorsJsonString);
+// Load trust anchors
+const anchors = Anchors.fromJson(anchorsJsonString);
 const veritas = new Veritas(anchors, false);
 
 console.log(`Anchors: ${veritas.oldestAnchor()} .. ${veritas.newestAnchor()}`);
 
-// Build query context
-const ctx = new VeritasQueryContext();
+// Build query context (empty = verify all handles)
+const ctx = new QueryContext();
 ctx.addRequest('alice@bitcoin');
 
 // Verify a message (binary data from relay)
@@ -53,6 +55,54 @@ const better = newerZone.isBetterThan(olderZone);
 for (const cert of result.certificates()) {
   console.log(`${cert.subject} [${cert.certType}]`);
 }
+```
+
+### Building a message
+
+```typescript
+import {
+  MessageBuilder,
+  RecordSet,
+} from '@spacesprotocol/react-native-libveritas';
+import { createOffchainData } from '@spacesprotocol/react-native-libveritas';
+
+// Construct offchain data
+const rs = new RecordSet(1, '{"nostr":"npub1...","ipv4":"127.0.0.1"}');
+const sig = wallet.signSchnorr(rs.id());
+const offchainBytes = createOffchainData(rs, sig);
+
+// Build a message with certificates and offchain data
+const builder = new MessageBuilder([
+  { name: '@bitcoin', cert: rootCertBytes },
+  { name: 'alice@bitcoin', offchainData: offchainBytes, cert: leafCertBytes },
+]);
+
+// Get the chain proof request to send to a provider
+const request = builder.chainProofRequest();
+
+// ... send request to provider, get chain proof back ...
+
+const msg = builder.build(chainProofBytes);
+
+// Serialize for transport
+const bytes = msg.toBytes();
+```
+
+### Updating offchain data
+
+```typescript
+// Update offchain data on a verified message (no cert changes)
+const msg = result.message();
+
+const rs = new RecordSet(2, '{"nostr":"npub1new..."}');
+const sig = wallet.signSchnorr(rs.id());
+const offchainBytes = createOffchainData(rs, sig);
+
+msg.update([
+  { name: 'alice@bitcoin', offchainData: offchainBytes },
+]);
+
+const updatedBytes = msg.toBytes();
 ```
 
 ## Building from source

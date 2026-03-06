@@ -11,16 +11,16 @@ pip install libveritas
 ## Usage
 
 ```python
-from libveritas import VeritasAnchors, Veritas, VeritasQueryContext
+from libveritas import Anchors, Veritas, QueryContext
 
 # Load trust anchors
-anchors = VeritasAnchors.from_json(anchors_json_string)
+anchors = Anchors.from_json(anchors_json_string)
 veritas = Veritas(anchors, dev_mode=False)
 
 print(f"Anchors: {veritas.oldest_anchor()} .. {veritas.newest_anchor()}")
 
 # Build query context (empty = verify all handles)
-ctx = VeritasQueryContext()
+ctx = QueryContext()
 
 # Verify a message
 result = veritas.verify_message(ctx, message_bytes)

@@ -23,7 +23,7 @@ fn get_optional_bytes(obj: &JsValue, key: &str) -> Option<Vec<u8>> {
     Some(js_sys::Uint8Array::from(val).to_vec())
 }
 
-/// Parse a JS object into a DataUpdateRequest (name + offchain data, no cert).
+/// Parse a JS object into a DataUpdateRequest (name + records, no cert).
 fn parse_data_update(entry: &JsValue) -> Result<builder::DataUpdateRequest, JsError> {
     let name = js_sys::Reflect::get(entry, &"name".into())
         .ok()
@@ -33,20 +33,20 @@ fn parse_data_update(entry: &JsValue) -> Result<builder::DataUpdateRequest, JsEr
     let handle = SName::from_str(&name)
         .map_err(|e| JsError::new(&format!("invalid name '{}': {}", name, e)))?;
 
-    let offchain_data = get_optional_bytes(entry, "offchainData")
-        .map(|b| msg::OffchainData::from_slice(&b))
+    let records = get_optional_bytes(entry, "records")
+        .map(|b| msg::OffchainRecords::from_slice(&b))
         .transpose()
-        .map_err(|e| JsError::new(&format!("invalid offchain_data: {e}")))?;
+        .map_err(|e| JsError::new(&format!("invalid records: {e}")))?;
 
-    let delegate_offchain_data = get_optional_bytes(entry, "delegateOffchainData")
-        .map(|b| msg::OffchainData::from_slice(&b))
+    let delegate_records = get_optional_bytes(entry, "delegateRecords")
+        .map(|b| msg::OffchainRecords::from_slice(&b))
         .transpose()
-        .map_err(|e| JsError::new(&format!("invalid delegate_offchain_data: {e}")))?;
+        .map_err(|e| JsError::new(&format!("invalid delegate_records: {e}")))?;
 
     Ok(builder::DataUpdateRequest {
         handle,
-        offchain_data,
-        delegate_offchain_data,
+        records,
+        delegate_records,
     })
 }
 
@@ -169,13 +169,13 @@ impl Message {
         self.inner.to_bytes()
     }
 
-    /// Update offchain data on this message.
+    /// Update records on this message.
     ///
     /// Accepts a JS array of data update entries:
     /// ```js
     /// msg.update([
-    ///   { name: "alice@bitcoin", offchainData: Uint8Array },
-    ///   { name: "@bitcoin", delegateOffchainData: Uint8Array }
+    ///   { name: "alice@bitcoin", records: Uint8Array },
+    ///   { name: "@bitcoin", delegateRecords: Uint8Array }
     /// ])
     /// ```
     ///
@@ -199,8 +199,8 @@ impl MessageBuilder {
     ///
     /// ```js
     /// let builder = new MessageBuilder([
-    ///   { name: "@bitcoin", offchainData: Uint8Array, cert: Uint8Array },
-    ///   { name: "alice@bitcoin", offchainData: Uint8Array, cert: Uint8Array }
+    ///   { name: "@bitcoin", records: Uint8Array, cert: Uint8Array },
+    ///   { name: "alice@bitcoin", records: Uint8Array, cert: Uint8Array }
     /// ])
     /// ```
     #[wasm_bindgen(constructor)]
@@ -345,63 +345,189 @@ impl VerifiedMessage {
     }
 }
 
-/// Serialized records ready to be signed.
+// ── Record / RecordSet ────────────────────────────────────────────
+
+fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
+    let rtype = js_sys::Reflect::get(obj, &"type".into())
+        .ok().and_then(|v| v.as_string())
+        .ok_or_else(|| JsError::new("record must have a 'type' field"))?;
+    match rtype.as_str() {
+        "seq" => {
+            let version = js_sys::Reflect::get(obj, &"version".into())
+                .ok().and_then(|v| v.as_f64())
+                .ok_or_else(|| JsError::new("seq record: 'version' must be a number"))? as u64;
+            Ok(sip7::Record::seq(version))
+        }
+        "txt" => {
+            let key = js_sys::Reflect::get(obj, &"key".into())
+                .ok().and_then(|v| v.as_string())
+                .ok_or_else(|| JsError::new("txt record: 'key' must be a string"))?;
+            let value = js_sys::Reflect::get(obj, &"value".into())
+                .ok().and_then(|v| v.as_string())
+                .ok_or_else(|| JsError::new("txt record: 'value' must be a string"))?;
+            Ok(sip7::Record::txt(&key, &value))
+        }
+        "blob" => {
+            let key = js_sys::Reflect::get(obj, &"key".into())
+                .ok().and_then(|v| v.as_string())
+                .ok_or_else(|| JsError::new("blob record: 'key' must be a string"))?;
+            let value = js_sys::Reflect::get(obj, &"value".into())
+                .map(|v| js_sys::Uint8Array::from(v).to_vec())
+                .map_err(|_| JsError::new("blob record: 'value' must be a Uint8Array"))?;
+            Ok(sip7::Record::blob(&key, value))
+        }
+        "unknown" => {
+            let rt = js_sys::Reflect::get(obj, &"rtype".into())
+                .ok().and_then(|v| v.as_f64())
+                .ok_or_else(|| JsError::new("unknown record: 'rtype' must be a number"))? as u8;
+            let rdata = js_sys::Reflect::get(obj, &"rdata".into())
+                .map(|v| js_sys::Uint8Array::from(v).to_vec())
+                .map_err(|_| JsError::new("unknown record: 'rdata' must be a Uint8Array"))?;
+            Ok(sip7::Record::unknown(rt, rdata))
+        }
+        other => Err(JsError::new(&format!("unknown record type: {other}"))),
+    }
+}
+
+fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
+    match record {
+        sip7::Record::Seq(version) => Record::seq(*version),
+        sip7::Record::Txt { key, value } => Record::txt(key, value),
+        sip7::Record::Blob { key, value } => Record::blob(key, value),
+        sip7::Record::Unknown { rtype, rdata } => Record::unknown(*rtype, rdata),
+    }
+}
+
+/// Record constructors for building a RecordSet.
 ///
 /// ```js
-/// let rs = new RecordSet(1, { nostr: "npub1...", ipv4: "127.0.0.1" });
-/// let sig = wallet.signSchnorr(rs.id());
-/// let offchainBytes = OffchainData.from(rs, sig);
+/// const rs = RecordSet.pack([
+///     Record.txt("btc", "bc1qtest"),
+///     Record.blob("avatar", pngBytes),
+///     Record.unknown(0x10, raw),
+/// ]);
+/// ```
+#[wasm_bindgen]
+pub struct Record;
+
+#[wasm_bindgen]
+impl Record {
+    pub fn seq(version: u64) -> JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"type".into(), &"seq".into()).unwrap();
+        js_sys::Reflect::set(&obj, &"version".into(), &version.into()).unwrap();
+        obj.into()
+    }
+
+    pub fn txt(key: &str, value: &str) -> JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"type".into(), &"txt".into()).unwrap();
+        js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"value".into(), &value.into()).unwrap();
+        obj.into()
+    }
+
+    pub fn blob(key: &str, value: &[u8]) -> JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"type".into(), &"blob".into()).unwrap();
+        js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"value".into(), &js_sys::Uint8Array::from(value)).unwrap();
+        obj.into()
+    }
+
+    pub fn unknown(rtype: u8, rdata: &[u8]) -> JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"type".into(), &"unknown".into()).unwrap();
+        js_sys::Reflect::set(&obj, &"rtype".into(), &rtype.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"rdata".into(), &js_sys::Uint8Array::from(rdata)).unwrap();
+        obj.into()
+    }
+}
+
+/// SIP-7 record set — wire-format encoded records.
+///
+/// ```js
+/// // Pack from records
+/// const rs = RecordSet.pack([Record.txt("btc", "bc1qtest")]);
+/// const wire = rs.toBytes();
+///
+/// // Load from wire bytes
+/// const rs = new RecordSet(wire);
+/// for (const r of rs.unpack()) { ... }
 /// ```
 #[wasm_bindgen]
 pub struct RecordSet {
-    inner: Option<msg::RecordSet>,
+    inner: sip7::RecordSet,
 }
 
 #[wasm_bindgen]
 impl RecordSet {
-    /// Create a record set from a sequence number and a JS object of key-value pairs.
+    /// Wrap raw wire bytes (lazy — no parsing until unpack).
     #[wasm_bindgen(constructor)]
-    pub fn new(seq: u32, records: JsValue) -> Result<RecordSet, JsError> {
-        let entries = js_sys::Object::entries(&records.into());
-        let mut recs = Vec::with_capacity(entries.length() as usize);
-        for i in 0..entries.length() {
-            let pair = js_sys::Array::from(&entries.get(i));
-            let key = pair.get(0).as_string()
-                .ok_or_else(|| JsError::new("record key must be a string"))?;
-            let value = pair.get(1).as_string()
-                .ok_or_else(|| JsError::new("record value must be a string"))?;
-            recs.push(libveritas::records::Record { name: key, value });
-        }
-        Ok(RecordSet {
-            inner: Some(msg::RecordSet::new(seq, &recs)),
-        })
+    pub fn new(data: &[u8]) -> RecordSet {
+        RecordSet { inner: sip7::RecordSet::new(data.to_vec()) }
     }
 
-    /// The 32-byte hash to sign.
-    pub fn id(&self) -> Result<Vec<u8>, JsError> {
-        let rs = self.inner.as_ref()
-            .ok_or_else(|| JsError::new("record set already consumed"))?;
-        Ok(rs.id().to_vec())
+    /// Pack records into wire format.
+    pub fn pack(records: JsValue) -> Result<RecordSet, JsError> {
+        let array = js_sys::Array::from(&records);
+        let mut sip_records = Vec::with_capacity(array.length() as usize);
+        for i in 0..array.length() {
+            sip_records.push(parse_js_record(&array.get(i))?);
+        }
+        let inner = sip7::RecordSet::pack(sip_records)
+            .map_err(|e| JsError::new(&format!("pack failed: {e}")))?;
+        Ok(RecordSet { inner })
+    }
+
+    /// Raw wire bytes.
+    #[wasm_bindgen(js_name = "toBytes")]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.inner.as_slice().to_vec()
+    }
+
+    /// Parse all records.
+    pub fn unpack(&self) -> Result<JsValue, JsError> {
+        let records = self.inner.unpack()
+            .map_err(|e| JsError::new(&format!("unpack failed: {e}")))?;
+        let array = js_sys::Array::new();
+        for record in records {
+            array.push(&sip7_record_to_js(&record));
+        }
+        Ok(array.into())
+    }
+
+    #[wasm_bindgen(js_name = "isEmpty")]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// The 32-byte signing hash (Spaces signed-message prefix + SHA256).
+    #[wasm_bindgen(js_name = "signingId")]
+    pub fn signing_id(&self) -> Vec<u8> {
+        let msg = libveritas::hash_signable_message(self.inner.as_slice());
+        msg.as_ref().to_vec()
     }
 }
 
-/// Helpers for constructing OffchainData.
+/// Helpers for constructing OffchainRecords (signed record sets).
+///
+/// ```js
+/// const rs = RecordSet.pack([Record.seq(0), Record.txt("btc", "bc1qtest")]);
+/// const sig = await wallet.signSchnorr(rs.signingId());
+/// const bytes = OffchainRecords.encode(rs, sig);
+/// ```
 #[wasm_bindgen]
-pub struct OffchainData;
+pub struct OffchainRecords;
 
 #[wasm_bindgen]
-impl OffchainData {
-    /// Create borsh-encoded OffchainData from a RecordSet and a 64-byte Schnorr signature.
-    ///
-    /// Consumes the RecordSet.
-    #[wasm_bindgen(js_name = "from")]
-    pub fn from_record_set(record_set: &mut RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
-        let rs = record_set.inner.take()
-            .ok_or_else(|| JsError::new("record set already consumed"))?;
+impl OffchainRecords {
+    /// Create borsh-encoded OffchainRecords from a RecordSet and 64-byte signature.
+    pub fn encode(record_set: &RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
         let sig: [u8; 64] = signature.try_into()
             .map_err(|_| JsError::new("signature must be 64 bytes"))?;
-        let offchain = msg::OffchainData::from_record_set(
-            rs,
+        let offchain = msg::OffchainRecords::new(
+            record_set.inner.clone(),
             libveritas::cert::Signature(sig),
         );
         Ok(offchain.to_bytes())

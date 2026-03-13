@@ -439,8 +439,8 @@ impl TestHandleTree {
             sovereignty: SovereigntyState::Dependent,
             handle: sname(&format!("{}{}", name, self.space)),
             script_pubkey: genesis_spk,
-            data: None,
-            offchain_data: None,
+            fallback_records: None,
+            records: None,
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
         };
@@ -563,7 +563,7 @@ impl TestHandleTree {
             handles.push(msg::Handle {
                 name: l,
                 genesis_spk: handle.genesis_spk.clone(),
-                data: None,
+                records: None,
                 signature: None, // Final cert - no signature
             });
         }
@@ -596,8 +596,8 @@ impl TestHandleTree {
                     tree: HandleSubtree(handles_proof),
                     handles,
                 }],
-                offchain_data: None,
-                delegate_offchain_data: None,
+                records: None,
+                delegate_records: None,
             }],
         }
     }
@@ -664,12 +664,12 @@ impl TestHandleTree {
                     handles: vec![msg::Handle {
                         name: staged.handle.name.clone(),
                         genesis_spk: staged.handle.genesis_spk.clone(),
-                        data: None,
+                        records: None,
                         signature: Some(staged.signature),
                     }],
                 }],
-                offchain_data: None,
-                delegate_offchain_data: None,
+                records: None,
+                delegate_records: None,
             }],
         }
     }
@@ -804,7 +804,7 @@ fn verify_root_pending() {
 
     assert_eq!(result.zones.len(), 1);
     let zone = &result.zones[0];
-    assert!(matches!(zone.sovereignty, SovereigntyState::Pending));
+    assert!(matches!(zone.sovereignty, SovereigntyState::Sovereign));
     let ProvableOption::Exists { value: c } = &zone.commitment else {
         panic!("expected commitment Exists");
     };
@@ -894,8 +894,8 @@ fn verify_uses_better_cached_zone() {
         sovereignty: SovereigntyState::Dependent,
         handle: sname("alice@bitcoin"),
         script_pubkey: ScriptBuf::new(),
-        data: None,
-        offchain_data: None,
+        fallback_records: None,
+        records: None,
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
     };

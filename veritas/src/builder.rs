@@ -1,13 +1,13 @@
 use crate::cert::{Certificate, ChainProofRequestUtils};
-use crate::msg::{ChainProof, Message, OffchainData};
+use crate::msg::{ChainProof, Message, OffchainRecords};
 use crate::sname::SName;
 use crate::MessageError;
 use spaces_ptr::ChainProofRequest;
 
 pub struct DataUpdateRequest {
     pub handle: SName,
-    pub offchain_data: Option<OffchainData>,
-    pub delegate_offchain_data: Option<OffchainData>,
+    pub records: Option<OffchainRecords>,
+    pub delegate_records: Option<OffchainRecords>,
 }
 
 pub struct UpdateRequest {
@@ -61,11 +61,11 @@ impl MessageBuilder {
         let mut msg = Message::try_from_certificates(chain, certs)?;
 
         for update in self.reqs {
-            if let Some(data) = update.data.offchain_data {
-                msg.set_offchain_data(&update.data.handle, data);
+            if let Some(data) = update.data.records {
+                msg.set_records(&update.data.handle, data);
             }
-            if let Some(data) = update.data.delegate_offchain_data {
-                msg.set_delegate_offchain_data(&update.data.handle, data);
+            if let Some(data) = update.data.delegate_records {
+                msg.set_delegate_records(&update.data.handle, data);
             }
         }
 
@@ -79,11 +79,11 @@ impl Message {
     /// Construct a new message to update certificates.
     pub fn update(&mut self, updates: Vec<DataUpdateRequest>) {
         for update in updates {
-            if let Some(data) = update.offchain_data {
-                self.set_offchain_data(&update.handle, data);
+            if let Some(data) = update.records {
+                self.set_records(&update.handle, data);
             }
-            if let Some(data) = update.delegate_offchain_data {
-                self.set_delegate_offchain_data(&update.handle, data);
+            if let Some(data) = update.delegate_records {
+                self.set_delegate_records(&update.handle, data);
             }
         }
     }

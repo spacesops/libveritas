@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 libveritas = { path = "../veritas" }
 libveritas_zk = { path = "../zk" }
+sip7 = { workspace = true }
 spacedb = { workspace = true }
 spaces_protocol = { workspace = true }
 spaces_ptr = { workspace = true }

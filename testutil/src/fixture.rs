@@ -4,7 +4,6 @@ use spaces_ptr::RootAnchor;
 use libveritas::{msg, SovereigntyState, Veritas};
 use libveritas::cert::{HandleSubtree, PtrsSubtree, SpacesSubtree};
 use libveritas::msg::{Bundle, ChainProof};
-use libveritas::records::RawRecords;
 use crate::{TestChain, TestDelegatedSpace, TestHandleTree};
 
 #[derive(Clone,Debug)]
@@ -212,8 +211,8 @@ impl FixtureRunner {
             space: self.space.space.label(),
             receipt: None,
             epochs: vec![],
-            offchain_data: None,
-            delegate_offchain_data: None,
+            records: None,
+            delegate_records: None,
         };
 
         for c in &mut self.handles.commitments {
@@ -224,15 +223,16 @@ impl FixtureRunner {
             };
             for (_, handle) in &mut c.handles {
                 // Add some off-chain data
-                handle.set_offchain_data(
-                    0,
-                    RawRecords::new(0, handle.name.as_slabel().as_ref().to_vec()),
+                handle.set_records(
+                    sip7::RecordSet::pack(vec![
+                        sip7::Record::txt("name", &handle.name.to_string()),
+                    ]).expect("pack records"),
                 );
 
                 epoch.handles.push(msg::Handle {
                     name: handle.name.clone(),
                     genesis_spk: handle.genesis_spk.clone(),
-                    data: handle.offchain_data.clone(),
+                    records: handle.records.clone(),
                     signature: None,
                 })
             }
@@ -247,14 +247,15 @@ impl FixtureRunner {
 
         for (_, staged) in &mut self.handles.staged {
             // add some off-chain data
-            staged.handle.set_offchain_data(
-                0,
-                RawRecords::new(0, staged.handle.name.as_slabel().as_ref().to_vec()),
+            staged.handle.set_records(
+                sip7::RecordSet::pack(vec![
+                    sip7::Record::txt("name", &staged.handle.name.to_string()),
+                ]).expect("pack records"),
             );
             staging.handles.push(msg::Handle {
                 name: staged.handle.name.clone(),
                 genesis_spk: staged.handle.genesis_spk.clone(),
-                data: staged.handle.offchain_data.clone(),
+                records: staged.handle.records.clone(),
                 signature: Some(staged.signature),
             })
         }
@@ -439,6 +440,6 @@ mod tests {
         assert_eq!(states.staged, vec!["grace", "heidi"]);
         assert!(states.is_staged("grace"));
         assert!(!states.is_committed("grace"));
-        assert_eq!(states.sovereignty("grace"), None);
+        assert_eq!(states.sovereignty("grace"), Some(SovereigntyState::Dependent));
     }
 }

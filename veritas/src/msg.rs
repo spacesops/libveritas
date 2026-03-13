@@ -10,7 +10,6 @@ use std::io::{Read, Write};
 
 use crate::{MessageError, Zone};
 use crate::cert::{Certificate, HandleSubtree, PtrsSubtree, Signature, SpacesSubtree, Witness};
-use crate::records::{RawRecords, Record};
 use crate::sname::{Label, NameLike, SName};
 
 /// Context for a verification query.
@@ -98,15 +97,15 @@ impl Message {
         borsh::to_vec(self).expect("message serialization should not fail")
     }
 
-    pub fn set_delegate_offchain_data(&mut self, handle: &SName, data: OffchainData) {
-        self.set_offchain_data_inner(handle, data, true)
+    pub fn set_delegate_records(&mut self, handle: &SName, data: OffchainRecords) {
+        self.set_records_inner(handle, data, true)
     }
 
-    pub fn set_offchain_data(&mut self, handle: &SName, data: OffchainData) {
-        self.set_offchain_data_inner(handle, data, false)
+    pub fn set_records(&mut self, handle: &SName, data: OffchainRecords) {
+        self.set_records_inner(handle, data, false)
     }
 
-    fn set_offchain_data_inner(&mut self, handle: &SName, data: OffchainData, delegate: bool) {
+    fn set_records_inner(&mut self, handle: &SName, data: OffchainRecords, delegate: bool) {
         let (space, subspace) = match handle.label_count() {
             1 => (handle.space().unwrap(), None),
             2 => (handle.space().unwrap(), Some(handle.subspace().unwrap())),
@@ -121,8 +120,8 @@ impl Message {
 
         match subspace {
             None => match delegate {
-                true => bundle.delegate_offchain_data = Some(data),
-                false => bundle.offchain_data = Some(data),
+                true => bundle.delegate_records = Some(data),
+                false => bundle.records = Some(data),
             }
             Some(name) => {
                 if let Some(handle) = bundle
@@ -131,7 +130,7 @@ impl Message {
                     .flat_map(|e| e.handles.iter_mut())
                     .find(|h| h.name == name)
                 {
-                    handle.data = Some(data);
+                    handle.records = Some(data);
                 }
             }
         }
@@ -168,8 +167,8 @@ impl Message {
                         _ => continue,
                     },
                     epochs: vec![],
-                    offchain_data: None,
-                    delegate_offchain_data: None,
+                    records: None,
+                    delegate_records: None,
                 },
             );
         }
@@ -191,7 +190,7 @@ impl Message {
                     e.handles.push(Handle {
                         name: leaf.subject.subspace().unwrap(),
                         genesis_spk,
-                        data: None,
+                        records: None,
                         signature,
                     });
                 }
@@ -201,7 +200,7 @@ impl Message {
                         Handle {
                             name: leaf.subject.subspace().unwrap(),
                             genesis_spk,
-                            data: None,
+                            records: None,
                             signature,
                         }
                     ],
@@ -239,10 +238,10 @@ pub struct Bundle {
     /// should have `tree.compute_root()` matching the receipt's final_root
     /// or the on-chain tip from the chain proof.
     pub epochs: Vec<Epoch>,
-    /// Off-chain data signed by the space owner.
-    pub offchain_data: Option<OffchainData>,
-    /// Off-chain data signed by the delegate.
-    pub delegate_offchain_data: Option<OffchainData>,
+    /// Signed records from the space owner.
+    pub records: Option<OffchainRecords>,
+    /// Signed records from the delegate.
+    pub delegate_records: Option<OffchainRecords>,
 }
 
 impl Bundle {
@@ -275,8 +274,8 @@ pub struct Handle {
     pub name: Label,
     /// The genesis script pubkey the handle was initialized with.
     pub genesis_spk: ScriptBuf,
-    /// Off-chain data signed by the handle owner
-    pub data: Option<OffchainData>,
+    /// Signed records from the handle owner.
+    pub records: Option<OffchainRecords>,
     /// Signature from the delegate for temporary certificates.
     /// `None` for final certificates (handle committed to tree).
     pub signature: Option<Signature>,
@@ -293,13 +292,12 @@ impl Handle {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct OffchainData {
-    pub seq: u32,
-    pub data: RawRecords,
+pub struct OffchainRecords {
+    pub records: sip7::RecordSet,
     pub signature: Signature,
 }
 
-impl OffchainData {
+impl OffchainRecords {
     pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
         borsh::from_slice(bytes)
     }
@@ -308,13 +306,15 @@ impl OffchainData {
         borsh::to_vec(self).expect("offchain data serialization should not fail")
     }
 
-    /// Returns the bytes to sign: seq || data
-    pub fn signing_bytes(&self) -> Vec<u8> {
-        let data = self.data.as_bytes();
-        let mut bytes = Vec::with_capacity(4 + data.len());
-        bytes.extend_from_slice(&self.seq.to_le_bytes());
-        bytes.extend_from_slice(data);
-        bytes
+    /// The signing bytes are the raw sip7 wire bytes (seq is embedded as a record).
+    pub fn signing_bytes(&self) -> &[u8] {
+        self.records.as_slice()
+    }
+
+    /// The 32-byte signing hash (Spaces signed-message prefix + SHA256).
+    pub fn signing_id(&self) -> [u8; 32] {
+        let msg = crate::hash_signable_message(self.signing_bytes());
+        *msg.as_ref()
     }
 
     /// Verify the signature against the given script pubkey.
@@ -326,7 +326,7 @@ impl OffchainData {
         }
         let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
             .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
-        let msg = crate::hash_signable_message(&self.signing_bytes());
+        let msg = crate::hash_signable_message(self.signing_bytes());
         let sig = secp256k1::schnorr::Signature::from_slice(&self.signature.0)
             .map_err(|_| crate::SignatureError::InvalidSignature)?;
         secp256k1::Secp256k1::verification_only()
@@ -335,63 +335,23 @@ impl OffchainData {
     }
 
     pub fn is_better_than(&self, other: &Self) -> bool {
-        if self.seq != other.seq {
-            return self.seq > other.seq;
+        let self_seq = self.records.seq().unwrap_or(0);
+        let other_seq = other.records.seq().unwrap_or(0);
+        if self_seq != other_seq {
+            return self_seq > other_seq;
         }
         // Same seq, compare data hash for deterministic tiebreaker
-        let hash_a = Sha256Hasher::hash(self.data.as_bytes());
-        let hash_b = Sha256Hasher::hash(other.data.as_bytes());
+        let hash_a = Sha256Hasher::hash(self.records.as_slice());
+        let hash_b = Sha256Hasher::hash(other.records.as_slice());
         if hash_a != hash_b {
             return hash_a > hash_b;
         }
         false
     }
 
-    /// Create OffchainData from a record set and signature.
-    pub fn from_record_set(rs: RecordSet, signature: Signature) -> Self {
-        Self {
-            seq: rs.seq,
-            data: rs.data,
-            signature,
-        }
-    }
-}
-
-/// Serialized records ready to be signed.
-///
-/// Holds a sequence number and deterministically serialized records.
-/// Use [`id()`](RecordSet::id) to get the 32-byte hash to sign,
-/// then pass to [`OffchainData::from_record_set()`] with the signature.
-#[derive(Clone)]
-pub struct RecordSet {
-    seq: u32,
-    data: RawRecords,
-}
-
-impl RecordSet {
-    /// Create a new record set from a sequence number and key-value records.
-    ///
-    /// Records are sorted by key for deterministic serialization.
-    pub fn new(seq: u32, records: &[Record]) -> Self {
-        Self {
-            seq,
-            data: RawRecords::from_records(records),
-        }
-    }
-
-    /// The signing bytes: `seq (LE u32) || RawRecords bytes`.
-    pub fn signing_bytes(&self) -> Vec<u8> {
-        let data = self.data.as_bytes();
-        let mut bytes = Vec::with_capacity(4 + data.len());
-        bytes.extend_from_slice(&self.seq.to_le_bytes());
-        bytes.extend_from_slice(data);
-        bytes
-    }
-
-    /// The 32-byte hash to sign (Spaces signed-message prefix + SHA256).
-    pub fn id(&self) -> [u8; 32] {
-        let msg = crate::hash_signable_message(&self.signing_bytes());
-        *msg.as_ref()
+    /// Create OffchainRecords from a sip7 RecordSet and signature.
+    pub fn new(records: sip7::RecordSet, signature: Signature) -> Self {
+        Self { records, signature }
     }
 }
 
@@ -444,8 +404,8 @@ impl BorshSerialize for Bundle {
         BorshSerialize::serialize(&self.space, writer)?;
         BorshSerialize::serialize(&self.receipt, writer)?;
         BorshSerialize::serialize(&self.epochs, writer)?;
-        BorshSerialize::serialize(&self.offchain_data, writer)?;
-        BorshSerialize::serialize(&self.delegate_offchain_data, writer)
+        BorshSerialize::serialize(&self.records, writer)?;
+        BorshSerialize::serialize(&self.delegate_records, writer)
     }
 }
 
@@ -454,14 +414,14 @@ impl BorshDeserialize for Bundle {
         let space = SLabel::deserialize_reader(reader)?;
         let receipt = Option::<Receipt>::deserialize_reader(reader)?;
         let epochs = Vec::<Epoch>::deserialize_reader(reader)?;
-        let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
-        let delegate_offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
+        let records = Option::<OffchainRecords>::deserialize_reader(reader)?;
+        let delegate_records = Option::<OffchainRecords>::deserialize_reader(reader)?;
         Ok(Bundle {
             space,
             receipt,
             epochs,
-            offchain_data,
-            delegate_offchain_data,
+            records,
+            delegate_records,
         })
     }
 }
@@ -485,7 +445,7 @@ impl BorshSerialize for Handle {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.name, writer)?;
         BorshSerialize::serialize(&self.genesis_spk.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.data, writer)?;
+        BorshSerialize::serialize(&self.records, writer)?;
         BorshSerialize::serialize(&self.signature, writer)
     }
 }
@@ -495,33 +455,30 @@ impl BorshDeserialize for Handle {
         let name = Label::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         let genesis_spk = ScriptBuf::from_bytes(spk_bytes);
-        let data = Option::<OffchainData>::deserialize_reader(reader)?;
+        let records = Option::<OffchainRecords>::deserialize_reader(reader)?;
         let signature = Option::<Signature>::deserialize_reader(reader)?;
         Ok(Handle {
             name,
             genesis_spk,
-            data,
+            records,
             signature,
         })
     }
 }
 
-impl BorshSerialize for OffchainData {
+impl BorshSerialize for OffchainRecords {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        BorshSerialize::serialize(&self.seq, writer)?;
-        BorshSerialize::serialize(&self.data, writer)?;
+        BorshSerialize::serialize(&self.records.as_slice().to_vec(), writer)?;
         BorshSerialize::serialize(&self.signature, writer)
     }
 }
 
-impl BorshDeserialize for OffchainData {
+impl BorshDeserialize for OffchainRecords {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let seq = u32::deserialize_reader(reader)?;
-        let data = RawRecords::deserialize_reader(reader)?;
+        let data_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         let signature = Signature::deserialize_reader(reader)?;
-        Ok(OffchainData {
-            seq,
-            data,
+        Ok(OffchainRecords {
+            records: sip7::RecordSet::new(data_bytes),
             signature,
         })
     }

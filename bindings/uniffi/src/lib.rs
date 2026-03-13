@@ -22,7 +22,7 @@ pub enum VeritasError {
 
 #[derive(uniffi::Enum)]
 pub enum DelegateState {
-    Exists { script_pubkey: Vec<u8>, data: Option<Vec<u8>>, offchain_data: Option<OffchainRecord> },
+    Exists { script_pubkey: Vec<u8>, fallback_records: Option<Vec<u8>>, records: Option<Vec<u8>> },
     Empty,
     Unknown,
 }
@@ -43,12 +43,6 @@ pub enum CommitmentState {
 // -- Records --
 
 #[derive(uniffi::Record)]
-pub struct OffchainRecord {
-    pub seq: u32,
-    pub data: Vec<u8>,
-}
-
-#[derive(uniffi::Record)]
 pub struct Certificate {
     pub subject: String,
     pub cert_type: String,
@@ -59,16 +53,16 @@ pub struct Certificate {
 #[derive(uniffi::Record)]
 pub struct DataUpdateEntry {
     pub name: String,
-    pub offchain_data: Option<Vec<u8>>,
-    pub delegate_offchain_data: Option<Vec<u8>>,
+    pub records: Option<Vec<u8>>,
+    pub delegate_records: Option<Vec<u8>>,
 }
 
 /// Update entry for MessageBuilder — includes optional cert.
 #[derive(uniffi::Record)]
 pub struct UpdateEntry {
     pub name: String,
-    pub offchain_data: Option<Vec<u8>>,
-    pub delegate_offchain_data: Option<Vec<u8>>,
+    pub records: Option<Vec<u8>>,
+    pub delegate_records: Option<Vec<u8>>,
     pub cert: Option<Vec<u8>>,
 }
 
@@ -95,24 +89,24 @@ fn parse_data_update(entry: &DataUpdateEntry) -> Result<builder::DataUpdateReque
             message: format!("invalid name '{}': {}", entry.name, e),
         })?;
 
-    let offchain_data = entry.offchain_data.as_ref()
-        .map(|b| msg::OffchainData::from_slice(b))
+    let records = entry.records.as_ref()
+        .map(|b| msg::OffchainRecords::from_slice(b))
         .transpose()
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid offchain_data: {e}"),
+            message: format!("invalid records: {e}"),
         })?;
 
-    let delegate_offchain_data = entry.delegate_offchain_data.as_ref()
-        .map(|b| msg::OffchainData::from_slice(b))
+    let delegate_records = entry.delegate_records.as_ref()
+        .map(|b| msg::OffchainRecords::from_slice(b))
         .transpose()
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid delegate_offchain_data: {e}"),
+            message: format!("invalid delegate_records: {e}"),
         })?;
 
     Ok(builder::DataUpdateRequest {
         handle,
-        offchain_data,
-        delegate_offchain_data,
+        records,
+        delegate_records,
     })
 }
 
@@ -123,8 +117,8 @@ fn parse_data_updates(entries: &[DataUpdateEntry]) -> Result<Vec<builder::DataUp
 fn parse_update_entry(entry: &UpdateEntry) -> Result<builder::UpdateRequest, VeritasError> {
     let data = parse_data_update(&DataUpdateEntry {
         name: entry.name.clone(),
-        offchain_data: entry.offchain_data.clone(),
-        delegate_offchain_data: entry.delegate_offchain_data.clone(),
+        records: entry.records.clone(),
+        delegate_records: entry.delegate_records.clone(),
     })?;
 
     let cert = entry.cert.as_ref()
@@ -166,26 +160,20 @@ impl Zone {
         self.inner.script_pubkey.as_bytes().to_vec()
     }
 
-    pub fn data(&self) -> Option<Vec<u8>> {
-        self.inner.data.as_ref().map(|d| d.to_vec())
+    pub fn fallback_records(&self) -> Option<Vec<u8>> {
+        self.inner.fallback_records.as_ref().map(|d| d.as_slice().to_vec())
     }
 
-    pub fn offchain_data(&self) -> Option<OffchainRecord> {
-        self.inner.offchain_data.as_ref().map(|od| OffchainRecord {
-            seq: od.seq,
-            data: od.data.to_vec(),
-        })
+    pub fn records(&self) -> Option<Vec<u8>> {
+        self.inner.records.as_ref().map(|d| d.as_slice().to_vec())
     }
 
     pub fn delegate(&self) -> DelegateState {
         match &self.inner.delegate {
             libveritas::ProvableOption::Exists { value } => DelegateState::Exists {
                 script_pubkey: value.script_pubkey.as_bytes().to_vec(),
-                data: value.data.as_ref().map(|d| d.to_vec()),
-                offchain_data: value.offchain_data.as_ref().map(|od| OffchainRecord {
-                    seq: od.seq,
-                    data: od.data.to_vec(),
-                }),
+                fallback_records: value.fallback_records.as_ref().map(|d| d.as_slice().to_vec()),
+                records: value.records.as_ref().map(|d| d.as_slice().to_vec()),
             },
             libveritas::ProvableOption::Empty => DelegateState::Empty,
             libveritas::ProvableOption::Unknown => DelegateState::Unknown,
@@ -282,12 +270,11 @@ impl Message {
         self.inner.read().unwrap().to_bytes()
     }
 
-    /// Update offchain data and/or root certificates on this message.
+    /// Update records on this message.
     ///
     /// - `name`: handle string (e.g. "alice@bitcoin", "@bitcoin", "#12-12")
-    /// - `offchain_data`: borsh-encoded OffchainData (optional)
-    /// - `delegate_offchain_data`: borsh-encoded OffchainData (optional)
-    /// - `cert`: borsh-encoded Certificate (optional, root only — for receipt refresh)
+    /// - `records`: borsh-encoded OffchainRecords (optional)
+    /// - `delegate_records`: borsh-encoded OffchainRecords (optional)
     pub fn update(&self, updates: Vec<DataUpdateEntry>) -> Result<(), VeritasError> {
         let reqs = parse_data_updates(&updates)?;
         self.inner.write().unwrap().update(reqs);
@@ -370,52 +357,94 @@ impl Anchors {
     }
 }
 
-/// Serialized records ready to be signed.
+// ── Record / RecordSet ────────────────────────────────────────────
+
+/// A single SIP-7 record.
+#[derive(uniffi::Enum)]
+pub enum Record {
+    Seq { version: u64 },
+    Txt { key: String, value: String },
+    Blob { key: String, value: Vec<u8> },
+    Unknown { rtype: u8, rdata: Vec<u8> },
+}
+
+impl From<sip7::Record> for Record {
+    fn from(r: sip7::Record) -> Self {
+        match r {
+            sip7::Record::Seq(version) => Record::Seq { version },
+            sip7::Record::Txt { key, value } => Record::Txt { key, value },
+            sip7::Record::Blob { key, value } => Record::Blob { key, value },
+            sip7::Record::Unknown { rtype, rdata } => Record::Unknown { rtype, rdata },
+        }
+    }
+}
+
+impl From<Record> for sip7::Record {
+    fn from(r: Record) -> Self {
+        match r {
+            Record::Seq { version } => sip7::Record::seq(version),
+            Record::Txt { key, value } => sip7::Record::txt(&key, &value),
+            Record::Blob { key, value } => sip7::Record::blob(&key, value),
+            Record::Unknown { rtype, rdata } => sip7::Record::unknown(rtype, rdata),
+        }
+    }
+}
+
+/// SIP-7 record set — wire-format encoded records.
 #[derive(uniffi::Object)]
 pub struct RecordSet {
-    inner: msg::RecordSet,
+    inner: sip7::RecordSet,
 }
 
 #[uniffi::export]
 impl RecordSet {
-    /// Create a record set from a sequence number and a JSON string of key-value pairs.
-    ///
-    /// Records are sorted by key for deterministic serialization.
-    /// Example: `'{"nostr":"npub1...","ipv4":"127.0.0.1"}'`
+    /// Wrap raw wire bytes (lazy — no parsing until unpack).
     #[uniffi::constructor]
-    pub fn new(seq: u32, records_json: String) -> Result<Self, VeritasError> {
-        let map: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(&records_json).map_err(|e| VeritasError::InvalidInput {
-                message: format!("invalid records JSON: {e}"),
-            })?;
-        let records: Vec<libveritas::records::Record> = map
-            .into_iter()
-            .map(|(name, value)| libveritas::records::Record {
-                name,
-                value: match value {
-                    serde_json::Value::String(s) => s,
-                    other => other.to_string(),
-                },
-            })
-            .collect();
-        Ok(RecordSet {
-            inner: msg::RecordSet::new(seq, &records),
-        })
+    pub fn new(data: Vec<u8>) -> Self {
+        RecordSet { inner: sip7::RecordSet::new(data) }
     }
 
-    /// The 32-byte hash to sign.
-    pub fn id(&self) -> Vec<u8> {
-        self.inner.id().to_vec()
+    /// Pack records into wire format.
+    #[uniffi::constructor(name = "pack")]
+    pub fn pack(records: Vec<Record>) -> Result<Self, VeritasError> {
+        let sip_records: Vec<sip7::Record> = records.into_iter().map(Into::into).collect();
+        let inner = sip7::RecordSet::pack(sip_records)
+            .map_err(|e| VeritasError::InvalidInput { message: e.to_string() })?;
+        Ok(RecordSet { inner })
+    }
+
+    /// Raw wire bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.inner.as_slice().to_vec()
+    }
+
+    /// Parse all records.
+    pub fn unpack(&self) -> Result<Vec<Record>, VeritasError> {
+        self.inner.unpack()
+            .map(|records| records.into_iter().map(Into::into).collect())
+            .map_err(|e| VeritasError::InvalidInput { message: e.to_string() })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// The 32-byte signing hash (Spaces signed-message prefix + SHA256).
+    pub fn signing_id(&self) -> Vec<u8> {
+        let msg = libveritas::hash_signable_message(self.inner.as_slice());
+        msg.as_ref().to_vec()
     }
 }
 
-/// Create borsh-encoded OffchainData from a RecordSet and a 64-byte Schnorr signature.
+// ── OffchainRecords helpers ──────────────────────────────────────
+
+/// Create borsh-encoded OffchainRecords from a RecordSet and 64-byte Schnorr signature.
 #[uniffi::export]
-pub fn create_offchain_data(record_set: &RecordSet, signature: Vec<u8>) -> Result<Vec<u8>, VeritasError> {
+pub fn create_offchain_records(record_set: &RecordSet, signature: Vec<u8>) -> Result<Vec<u8>, VeritasError> {
     let sig: [u8; 64] = signature.try_into().map_err(|_| VeritasError::InvalidInput {
         message: "signature must be 64 bytes".to_string(),
     })?;
-    let offchain = msg::OffchainData::from_record_set(
+    let offchain = msg::OffchainRecords::new(
         record_set.inner.clone(),
         libveritas::cert::Signature(sig),
     );

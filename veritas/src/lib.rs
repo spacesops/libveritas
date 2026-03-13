@@ -16,14 +16,14 @@ use std::fmt;
 use std::io::{Read, Write};
 use spacedb::subtree::SubTree;
 use spaces_ptr::RootAnchor;
-use crate::msg::OffchainData;
 
 pub mod cert;
 pub mod msg;
-pub mod records;
 pub mod sname;
 pub mod constants;
 pub mod builder;
+
+pub use sip7;
 
 /// Result of verifying a message.
 ///
@@ -197,10 +197,10 @@ pub struct Zone {
     pub handle: SName,
     /// The current script pubkey that controls this handle.
     pub script_pubkey: ScriptBuf,
+    /// Verified off-chain records from the handle owner.
+    pub records: Option<sip7::RecordSet>,
     /// Optional on-chain data associated with the handle.
-    pub data: Option<records::RawRecords>,
-    /// Optional off-chain data signed by the handle owner
-    pub offchain_data: Option<OffchainData>,
+    pub fallback_records: Option<sip7::RecordSet>,
     /// Delegate information if the handle has delegated signing authority.
     pub delegate: ProvableOption<Delegate>,
     /// Commitment information including state root and finality status.
@@ -240,8 +240,9 @@ impl CommitmentInfo {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Delegate {
     pub script_pubkey: ScriptBuf,
-    pub data: Option<records::RawRecords>,
-    pub offchain_data: Option<OffchainData>,
+    /// Verified off-chain records from the delegate.
+    pub records: Option<sip7::RecordSet>,
+    pub fallback_records: Option<sip7::RecordSet>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -281,20 +282,22 @@ impl BorshDeserialize for SovereigntyState {
 impl BorshSerialize for Delegate {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.data, writer)?;
-        BorshSerialize::serialize(&self.offchain_data, writer)
+        let fallback_bytes: Option<Vec<u8>> = self.fallback_records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&fallback_bytes, writer)?;
+        let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&records_bytes, writer)
     }
 }
 
 impl BorshDeserialize for Delegate {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let data = Option::<records::RawRecords>::deserialize_reader(reader)?;
-        let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
+        let fallback_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
+        let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
         Ok(Delegate {
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
-            data,
-            offchain_data,
+            fallback_records: fallback_bytes.map(sip7::RecordSet::new),
+            records: records_bytes.map(sip7::RecordSet::new),
         })
     }
 }
@@ -351,8 +354,10 @@ impl BorshSerialize for Zone {
         BorshSerialize::serialize(&self.sovereignty, writer)?;
         BorshSerialize::serialize(&self.handle, writer)?;
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.data, writer)?;
-        BorshSerialize::serialize(&self.offchain_data, writer)?;
+        let fallback_bytes: Option<Vec<u8>> = self.fallback_records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&fallback_bytes, writer)?;
+        let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&records_bytes, writer)?;
         BorshSerialize::serialize(&self.delegate, writer)?;
         BorshSerialize::serialize(&self.commitment, writer)
     }
@@ -364,8 +369,8 @@ impl BorshDeserialize for Zone {
         let sovereignty = SovereigntyState::deserialize_reader(reader)?;
         let handle = SName::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let data = Option::<records::RawRecords>::deserialize_reader(reader)?;
-        let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
+        let fallback_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
+        let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
         let delegate: ProvableOption<Delegate> = ProvableOption::deserialize_reader(reader)?;
         let commitment: ProvableOption<CommitmentInfo> = ProvableOption::deserialize_reader(reader)?;
 
@@ -374,8 +379,8 @@ impl BorshDeserialize for Zone {
             sovereignty,
             handle,
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
-            data,
-            offchain_data,
+            fallback_records: fallback_bytes.map(sip7::RecordSet::new),
+            records: records_bytes.map(sip7::RecordSet::new),
             delegate,
             commitment,
         })
@@ -422,6 +427,21 @@ pub fn verify_schnorr(msg_hash: &[u8; 32], signature: &[u8; 64], pubkey: &[u8; 3
         .map_err(|_| SignatureError::VerificationFailed)
 }
 
+/// Compare two record sets by seq then data hash (for Zone freshness comparison).
+fn records_is_better(a: &sip7::RecordSet, b: &sip7::RecordSet) -> bool {
+    let a_seq = a.seq().unwrap_or(0);
+    let b_seq = b.seq().unwrap_or(0);
+    if a_seq != b_seq {
+        return a_seq > b_seq;
+    }
+    let hash_a = Sha256Hasher::hash(a.as_slice());
+    let hash_b = Sha256Hasher::hash(b.as_slice());
+    if hash_a != hash_b {
+        return hash_a > hash_b;
+    }
+    false
+}
+
 impl Zone {
     pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
         borsh::from_slice(bytes)
@@ -433,13 +453,13 @@ impl Zone {
 
     /// Returns the zone serialized for signing.
     ///
-    /// The `anchor` and `offchain_data` fields are zeroed out so delegate
+    /// The `anchor` and `records` fields are zeroed out so delegate
     /// signatures remain valid across different anchor snapshots and
-    /// don't include owner-signed data.
+    /// don't include owner-signed records.
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut zone = self.clone();
         zone.anchor = 0;
-        zone.offchain_data = None;
+        zone.records = None;
         borsh::to_vec(&zone).expect("zone serialization should not fail")
     }
 
@@ -471,7 +491,7 @@ impl Zone {
     /// 1. Higher commitment height (receipts are expensive, keep the latest)
     /// 2. Commitment knowledge (Exists > Empty > Unknown)
     /// 3. Delegate knowledge (Exists > Empty > Unknown)
-    /// 4. Higher offchain_data seq (owner-signed data freshness)
+    /// 4. Higher records seq (owner-signed records freshness, via sip7 Seq record)
     /// 5. Higher anchor (fresher chain state, tiebreaker only)
     ///
     /// Anchor is checked last to prevent attackers from downgrading cached
@@ -500,8 +520,8 @@ impl Zone {
         // Delegate knowledge
         match (&self.delegate, &other.delegate) {
             (ProvableOption::Exists { value: a }, ProvableOption::Exists { value: b }) => {
-                match (&a.offchain_data, &b.offchain_data) {
-                    (Some(a), Some(b)) => if a.is_better_than(b) {
+                match (&a.records, &b.records) {
+                    (Some(a), Some(b)) => if records_is_better(a, b) {
                         return Ok(true);
                     }
                     (Some(_), None) => return Ok(true),
@@ -516,10 +536,10 @@ impl Zone {
             _ => {}
         }
 
-        // Higher offchain_data seq = newer owner-signed data
+        // Higher records seq = newer owner-signed records
         // If seq is equal, compare data hashes for deterministic ordering
-        match (&self.offchain_data, &other.offchain_data) {
-            (Some(a), Some(b)) => if a.is_better_than(b) {
+        match (&self.records, &other.records) {
+            (Some(a), Some(b)) => if records_is_better(a, b) {
                 return Ok(true);
             }
             (Some(_), None) => return Ok(true),
@@ -785,8 +805,8 @@ impl Veritas {
                         space,
                         receipt: if receipt_verified { bundle.receipt } else { None },
                         epochs: vec![],
-                        offchain_data: bundle.offchain_data,
-                        delegate_offchain_data: bundle.delegate_offchain_data,
+                        records: bundle.records,
+                        delegate_records: bundle.delegate_records,
                     })
                 } else {
                     None
@@ -845,7 +865,11 @@ impl Veritas {
 
                 let zone = if handle.signature.is_some() {
                     if root != verified_tip.onchain.state_root {
-                        return Err(MessageError::TemporaryRequiresTip { handle: subject.to_string() });
+                        return Err(MessageError::TemporaryRequiresTip {
+                            handle: subject.to_string(),
+                            tip: verified_tip.onchain.state_root,
+                            got: root
+                        });
                     }
                     verify_temporary_handle(chain.anchor.height, &handle, &subject, &epoch.tree, target_zone)?
                 } else {
@@ -870,8 +894,8 @@ impl Veritas {
                 space,
                 receipt: if receipt_verified { bundle.receipt } else { None },
                 epochs: verified_epochs,
-                offchain_data: bundle.offchain_data,
-                delegate_offchain_data: bundle.delegate_offchain_data,
+                records: bundle.records,
+                delegate_records: bundle.delegate_records,
             })
         } else {
             None
@@ -980,15 +1004,23 @@ impl Veritas {
 
             let handle = SName::from_space(&bundle.space)
                 .map_err(|_| MessageError::InvalidSubject { subject: bundle.space.to_string() })?;
+            let mut verified_records = None;
+            if let Some(offchain) = &bundle.records {
+                offchain.verify(&ptrout.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
+                    handle: handle.to_string(),
+                    reason: e.to_string(),
+                })?;
+                verified_records = Some(offchain.records.clone());
+            }
             let z = Zone {
                 anchor: chain.anchor.height,
                 sovereignty: SovereigntyState::Sovereign,
                 handle,
                 script_pubkey: ptrout.script_pubkey,
-                data: ptrout.sptr.data
+                fallback_records: ptrout.sptr.data
                     .filter(|d| !d.is_empty())
-                    .map(|d| records::RawRecords::from_bytes(d.as_slice()).expect("non-empty")),
-                offchain_data: bundle.offchain_data.clone(),
+                    .map(|d| sip7::RecordSet::new(d.to_vec())),
+                records: verified_records,
                 delegate: ProvableOption::Empty,
                 commitment: ProvableOption::Empty,
             };
@@ -1005,8 +1037,8 @@ impl Veritas {
             sovereignty: SovereigntyState::Sovereign,
             handle,
             script_pubkey: Default::default(),
-            data: None,
-            offchain_data: None,
+            fallback_records: None,
+            records: None,
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
         };
@@ -1014,18 +1046,17 @@ impl Veritas {
             return Err(MessageError::SpaceNotFound { space: bundle.space.to_string() });
         };
 
-        z.data = space.data()
+        z.fallback_records = space.data()
             .filter(|d| !d.is_empty())
-            .map(|d| records::RawRecords::from_bytes(d).expect("non-empty"));
+            .map(|d| sip7::RecordSet::new(d.to_vec()));
         z.script_pubkey = spaceout.script_pubkey.clone();
-        z.offchain_data = bundle.offchain_data.clone();
-
-        // Verify offchain_data signature if present
-        if let Some(offchain) = &z.offchain_data {
-            offchain.verify(&z.script_pubkey).map_err(|e| MessageError::OffchainDataInvalid {
+        // Verify records signature if present, store just the RecordSet
+        if let Some(offchain) = &bundle.records {
+            offchain.verify(&z.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
                 handle: z.handle.to_string(),
                 reason: e.to_string(),
             })?;
+            z.records = Some(offchain.records.clone());
         }
 
         // Extract delegate info
@@ -1033,21 +1064,22 @@ impl Veritas {
             match delegate {
                 None => z.delegate = ProvableOption::Empty,
                 Some(delegate) => {
-                    let delegate_offchain = bundle.delegate_offchain_data.clone();
-                    if let Some(offchain) = &delegate_offchain {
+                    let mut delegate_records = None;
+                    if let Some(offchain) = &bundle.delegate_records {
                         offchain.verify(&delegate.script_pubkey)
-                            .map_err(|e| MessageError::OffchainDataInvalid {
+                            .map_err(|e| MessageError::RecordsInvalid {
                                 handle: z.handle.to_string(),
                                 reason: e.to_string(),
                             })?;
+                        delegate_records = Some(offchain.records.clone());
                     }
                     z.delegate = ProvableOption::Exists {
                         value: Delegate {
                             script_pubkey: delegate.script_pubkey,
-                            data: delegate.sptr.data
+                            fallback_records: delegate.sptr.data
                                 .filter(|d| !d.is_empty())
-                                .map(|d| records::RawRecords::from_bytes(d.as_slice()).expect("non-empty")),
-                            offchain_data: delegate_offchain,
+                                .map(|d| sip7::RecordSet::new(d.to_vec())),
+                            records: delegate_records,
                         },
                     }
                 }
@@ -1061,7 +1093,6 @@ impl Veritas {
                 Some(root) => {
                     let commitment = chain.ptrs.find_commitment(&bundle.space, root);
                     if let Ok(Some(commitment)) = commitment {
-                        z.sovereignty = self.sovereignty_for(commitment.block_height);
                         z.commitment = ProvableOption::Exists {
                             value: CommitmentInfo {
                                 onchain: commitment,
@@ -1105,13 +1136,22 @@ fn verify_temporary_handle(
         }
     };
 
+    let mut verified_records = None;
+    if let Some(offchain) = &handle.records {
+        offchain.verify(&handle.genesis_spk).map_err(|e| MessageError::RecordsInvalid {
+            handle: subject.to_string(),
+            reason: e.to_string(),
+        })?;
+        verified_records = Some(offchain.records.clone());
+    }
+
     let zone = Zone {
         anchor: anchor_height,
         sovereignty: SovereigntyState::Dependent,
         handle: subject.clone(),
         script_pubkey: handle.genesis_spk.clone(),
-        data: None,
-        offchain_data: handle.data.clone(),
+        fallback_records: None,
+        records: verified_records,
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
     };
@@ -1123,14 +1163,6 @@ fn verify_temporary_handle(
         handle: zone.handle.to_string(),
         reason: e.to_string(),
     })?;
-
-    // Verify offchain_data signature if present
-    if let Some(offchain) = &zone.offchain_data {
-        offchain.verify(&zone.script_pubkey).map_err(|e| MessageError::OffchainDataInvalid {
-            handle: zone.handle.to_string(),
-            reason: e.to_string(),
-        })?;
-    }
 
     Ok(zone)
 }
@@ -1169,29 +1201,30 @@ fn verify_final_handle(
             ptrout.script_pubkey,
             ptrout.sptr.data
                 .filter(|d| !d.is_empty())
-                .map(|d| records::RawRecords::from_bytes(d.as_slice()).expect("non-empty")),
+                .map(|d| sip7::RecordSet::new(d.to_vec())),
         ),
         None => (handle.genesis_spk.clone(), None),
     };
+
+    let mut verified_records = None;
+    if let Some(offchain) = &handle.records {
+        offchain.verify(&spk).map_err(|e| MessageError::RecordsInvalid {
+            handle: subject.to_string(),
+            reason: e.to_string(),
+        })?;
+        verified_records = Some(offchain.records.clone());
+    }
 
     let zone = Zone {
         anchor: anchor_height,
         sovereignty,
         handle: subject.clone(),
         script_pubkey: spk,
-        data: onchain_data,
-        offchain_data: handle.data.clone(),
+        fallback_records: onchain_data,
+        records: verified_records,
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
     };
-
-    // Verify offchain_data signature if present
-    if let Some(offchain) = &zone.offchain_data {
-        offchain.verify(&zone.script_pubkey).map_err(|e| MessageError::OffchainDataInvalid {
-            handle: zone.handle.to_string(),
-            reason: e.to_string(),
-        })?;
-    }
 
     Ok(zone)
 }
@@ -1238,7 +1271,7 @@ pub enum MessageError {
     /// Subject name is invalid
     InvalidSubject { subject: String },
     /// Temporary certificate must prove against the tip state
-    TemporaryRequiresTip { handle: String },
+    TemporaryRequiresTip { handle: String, tip: Hash, got: Hash },
     /// Handle already exists when exclusion proof expected
     HandleAlreadyExists { handle: String },
     /// Parent delegate is unknown, cannot verify signature
@@ -1246,7 +1279,7 @@ pub enum MessageError {
     /// Signature verification failed
     SignatureInvalid { handle: String, reason: String },
     /// Offchain data signature verification failed
-    OffchainDataInvalid { handle: String, reason: String },
+    RecordsInvalid { handle: String, reason: String },
     /// Final certificate requires non-empty handle tree
     FinalCertRequiresTree { handle: String },
     /// Handle not found in handle tree
@@ -1332,8 +1365,11 @@ impl fmt::Display for MessageError {
             Self::InvalidSubject { subject } => {
                 write!(f, "invalid subject: {}", subject)
             }
-            Self::TemporaryRequiresTip { handle } => {
-                write!(f, "temporary certificate requires tip for {}", handle)
+            Self::TemporaryRequiresTip { handle, tip, got } => {
+                write!(
+                    f, "Temporary handle {} verifies against {} but requires tip {}",
+                    handle, hex::encode(got), hex::encode(tip)
+                )
             }
             Self::HandleAlreadyExists { handle } => {
                 write!(f, "handle {} already exists", handle)
@@ -1344,8 +1380,8 @@ impl fmt::Display for MessageError {
             Self::SignatureInvalid { handle, reason } => {
                 write!(f, "signature invalid for {}: {}", handle, reason)
             }
-            Self::OffchainDataInvalid { handle, reason } => {
-                write!(f, "offchain data invalid for {}: {}", handle, reason)
+            Self::RecordsInvalid { handle, reason } => {
+                write!(f, "records invalid for {}: {}", handle, reason)
             }
             Self::FinalCertRequiresTree { handle } => {
                 write!(f, "final certificate requires non-empty tree for {}", handle)

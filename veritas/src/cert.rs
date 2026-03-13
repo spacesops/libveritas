@@ -157,7 +157,17 @@ impl ChainProofRequestUtils for ChainProofRequest {
         }
 
         match &cert.witness {
-            Witness::Root { .. } => {}
+            Witness::Root { receipt } => {
+                // Extract tip root from receipt journal to request its commitment key
+                if let Some(receipt) = receipt {
+                    if let Ok(zkc) = receipt.journal.decode::<libveritas_zk::guest::Commitment>() {
+                        let ck = CommitmentKey::new::<KeyHash>(&space, zkc.final_root);
+                        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Commitment(c) if *c == ck)) {
+                            self.ptrs_keys.push(PtrKeyKind::Commitment(ck));
+                        }
+                    }
+                }
+            }
             Witness::Leaf { genesis_spk, handles, .. } => {
                 // Commitment key for epoch root (only if tree is non-empty)
                 if !handles.0.is_empty() {

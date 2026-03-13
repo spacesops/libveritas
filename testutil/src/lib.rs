@@ -13,9 +13,8 @@ use bitcoin::secp256k1::rand::{self, SeedableRng};
 use bitcoin::{BlockHash, OutPoint, ScriptBuf, Txid};
 use borsh::{BorshDeserialize, BorshSerialize};
 use libveritas::cert::{HandleSubtree, KeyHash, PtrsSubtree, Signature, SpacesSubtree};
-use libveritas::msg::{self, ChainProof, Message, OffchainData};
+use libveritas::msg::{self, ChainProof, Message, OffchainRecords};
 use libveritas::sname::{Label, SName};
-use libveritas::records::RawRecords;
 use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
 use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
 use spacedb::Sha256Hasher;
@@ -117,7 +116,7 @@ pub struct TestHandle {
     pub name: Label,
     pub genesis_spk: ScriptBuf,
     pub keypair: Keypair,
-    pub offchain_data: Option<OffchainData>,
+    pub records: Option<OffchainRecords>,
 }
 
 #[derive(Clone)]
@@ -476,14 +475,13 @@ pub struct TestHandleTree {
 }
 
 impl TestHandle {
-    pub fn set_offchain_data(&mut self, seq: u32, data: RawRecords) {
-        let mut od = OffchainData {
-            seq,
-            data,
+    pub fn set_records(&mut self, data: sip7::RecordSet) {
+        let mut od = OffchainRecords {
+            records: data,
             signature: Signature([0u8; 64]),
         };
-        od.signature = sign_mesage(&od.signing_bytes(), &self.keypair);
-        self.offchain_data = Some(od);
+        od.signature = sign_mesage(od.signing_bytes(), &self.keypair);
+        self.records = Some(od);
     }
 }
 
@@ -515,7 +513,7 @@ impl TestHandleTree {
             name: label,
             genesis_spk: genesis_spk.clone(),
             keypair,
-            offchain_data: None,
+            records: None,
         };
 
         let zone = Zone {
@@ -523,8 +521,8 @@ impl TestHandleTree {
             sovereignty: SovereigntyState::Dependent,
             handle: sname(&format!("{}{}", name, self.space)),
             script_pubkey: genesis_spk,
-            data: None,
-            offchain_data: None,
+            fallback_records: None,
+            records: None,
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
         };
@@ -628,7 +626,7 @@ impl TestHandleTree {
             handles.push(msg::Handle {
                 name: l,
                 genesis_spk: handle.genesis_spk.clone(),
-                data: None,
+                records: None,
                 signature: None,
             });
         }
@@ -659,8 +657,8 @@ impl TestHandleTree {
                     tree: HandleSubtree(handles_proof),
                     handles,
                 }],
-                offchain_data: None,
-                delegate_offchain_data: None,
+                records: None,
+                delegate_records: None,
             }],
         }
     }
@@ -722,12 +720,12 @@ impl TestHandleTree {
                     handles: vec![msg::Handle {
                         name: staged.handle.name.clone(),
                         genesis_spk: staged.handle.genesis_spk.clone(),
-                        data: None,
+                        records: None,
                         signature: Some(staged.signature),
                     }],
                 }],
-                offchain_data: None,
-                delegate_offchain_data: None,
+                records: None,
+                delegate_records: None,
             }],
         }
     }

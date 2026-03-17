@@ -12,7 +12,7 @@ use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::rand::{self, SeedableRng};
 use bitcoin::{BlockHash, OutPoint, ScriptBuf, Txid};
 use borsh::{BorshDeserialize, BorshSerialize};
-use libveritas::cert::{HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree};
+use libveritas::cert::{HandleOut, HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree};
 use libveritas::msg::{self, ChainProof, Message, OffchainRecords};
 use libveritas::sname::{Label, SName};
 use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
@@ -542,9 +542,12 @@ impl TestHandleTree {
 
         for (_, handle) in handles.iter() {
             let handle_key = KeyHash::hash(handle.name.as_slabel().as_ref());
-            let spk = handle.genesis_spk.clone();
+            let handle_out = HandleOut {
+                name: handle.name.as_slabel().clone(),
+                spk: handle.genesis_spk.clone(),
+            };
             self.handle_tree
-                .insert(handle_key, ValueOrHash::Value(spk.to_bytes()))
+                .insert(handle_key, ValueOrHash::Value(handle_out.to_vec()))
                 .expect("insert handle");
         }
 

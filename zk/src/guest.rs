@@ -40,7 +40,7 @@ pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold:
     for entry in reader.iter() {
         subtree.insert(
             entry.handle.try_into().expect("32 byte subspace hash slice"),
-            ValueOrHash::Hash(entry.script_pubkey.try_into().expect("32 byte script_pubkey hash slice")),
+            ValueOrHash::Hash(entry.value_hash.try_into().expect("32 byte value hash slice")),
         )
             .map_err(|e| match e {
                 spacedb::Error::Verify(e) => {

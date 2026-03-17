@@ -7,7 +7,7 @@ pub struct BatchReader<'a>(pub &'a [u8]);
 
 pub struct Entry<'a> {
     pub handle: &'a [u8],
-    pub script_pubkey: &'a [u8],
+    pub value_hash: &'a [u8],
 }
 
 pub struct BodyIterator<'a> {
@@ -39,12 +39,12 @@ impl<'a> Iterator for BodyIterator<'a> {
         }
 
         let subspace_hash = &self.data[..32];
-        let script_pubkey_hash = &self.data[32..64];
+        let value_hash = &self.data[32..64];
         self.data = &self.data[64..];
 
         Some(Entry {
             handle: subspace_hash,
-            script_pubkey: script_pubkey_hash,
+            value_hash,
         })
     }
 }

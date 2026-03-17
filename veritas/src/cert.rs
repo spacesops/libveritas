@@ -224,11 +224,12 @@ impl ChainProofRequestUtils for ChainProofRequest {
         }
 
         // NumId keys from all handles in subtree
-        for (_, genesis_spk_bytes) in handles.0.iter() {
-            let genesis_spk = ScriptBuf::from_bytes(genesis_spk_bytes.to_vec());
-            let num_id = NumId::from_spk::<KeyHash>(genesis_spk);
-            if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Id(s) if *s == num_id)) {
-                self.nums.push(NumKeyKind::Id(num_id));
+        for (_, value) in handles.0.iter() {
+            if let Ok(handle_out) = HandleOut::from_slice(value) {
+                let num_id = NumId::from_spk::<KeyHash>(handle_out.spk);
+                if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Id(s) if *s == num_id)) {
+                    self.nums.push(NumKeyKind::Id(num_id));
+                }
             }
         }
     }
@@ -301,6 +302,40 @@ pub enum NumsValue {
     Unknown(Vec<u8>),
 }
 
+/// A handle entry in the handle subtree: name + genesis script pubkey.
+#[derive(Clone)]
+pub struct HandleOut {
+    pub name: SLabel,
+    pub spk: ScriptBuf,
+}
+
+impl HandleOut {
+    pub fn to_vec(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("handle out serialization should not fail")
+    }
+
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+}
+
+impl BorshSerialize for HandleOut {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.name, writer)?;
+        BorshSerialize::serialize(&self.spk.as_bytes().to_vec(), writer)
+    }
+}
+
+impl BorshDeserialize for HandleOut {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let name = SLabel::deserialize_reader(reader)?;
+        let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
+        Ok(HandleOut {
+            name,
+            spk: ScriptBuf::from_bytes(spk_bytes),
+        })
+    }
+}
 
 impl HandleSubtree {
     pub fn empty() -> Self {
@@ -327,9 +362,10 @@ impl HandleSubtree {
             return Ok(false);
         }
 
-        let genesis_spk_matches = self.0.iter()
-            .any(|(k, v)| *k == key && *v == genesis_spk.as_bytes());
-        Ok(genesis_spk_matches)
+        let matches = self.0.iter()
+            .any(|(k, v)| *k == key && HandleOut::from_slice(v)
+                .is_ok_and(|h| h.spk.as_bytes() == genesis_spk.as_bytes()));
+        Ok(matches)
     }
 }
 

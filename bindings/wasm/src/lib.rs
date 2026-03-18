@@ -6,8 +6,6 @@ use libveritas::msg;
 use libveritas::sname::SName;
 use serde::Serialize;
 use spaces_nums::RootAnchor;
-use spaces_protocol::bitcoin::ScriptBuf;
-use spaces_protocol::slabel::SLabel;
 
 /// Serialize through JSON to get human-readable serde output
 /// (hex hashes, string names, etc.) as a native JS object.
@@ -115,192 +113,19 @@ impl QueryContext {
     }
 }
 
-// -- Zone conversions (plain JS object ↔ inner Zone) --
+// -- Zone conversions (serde-based, matches Rust/Swift format exactly) --
 
-fn delegate_to_js(d: &libveritas::ProvableOption<libveritas::Delegate>) -> JsValue {
-    let obj = js_sys::Object::new();
-    match d {
-        libveritas::ProvableOption::Exists { value } => {
-            js_sys::Reflect::set(&obj, &"type".into(), &"exists".into()).unwrap();
-            js_sys::Reflect::set(&obj, &"scriptPubkey".into(),
-                &js_sys::Uint8Array::from(value.script_pubkey.as_bytes()).into()).unwrap();
-            js_sys::Reflect::set(&obj, &"records".into(), &match &value.records {
-                Some(d) => js_sys::Uint8Array::from(d.as_slice()).into(),
-                None => JsValue::NULL,
-            }).unwrap();
-            js_sys::Reflect::set(&obj, &"fallbackRecords".into(), &match &value.fallback_records {
-                Some(d) => js_sys::Uint8Array::from(d.as_slice()).into(),
-                None => JsValue::NULL,
-            }).unwrap();
-        }
-        libveritas::ProvableOption::Empty => {
-            js_sys::Reflect::set(&obj, &"type".into(), &"empty".into()).unwrap();
-        }
-        libveritas::ProvableOption::Unknown => {
-            js_sys::Reflect::set(&obj, &"type".into(), &"unknown".into()).unwrap();
-        }
-    }
-    obj.into()
-}
-
-fn commitment_to_js(c: &libveritas::ProvableOption<libveritas::CommitmentInfo>) -> JsValue {
-    let obj = js_sys::Object::new();
-    match c {
-        libveritas::ProvableOption::Exists { value } => {
-            js_sys::Reflect::set(&obj, &"type".into(), &"exists".into()).unwrap();
-            js_sys::Reflect::set(&obj, &"stateRoot".into(),
-                &js_sys::Uint8Array::from(&value.onchain.state_root[..]).into()).unwrap();
-            js_sys::Reflect::set(&obj, &"prevRoot".into(), &match &value.onchain.prev_root {
-                Some(r) => js_sys::Uint8Array::from(&r[..]).into(),
-                None => JsValue::NULL,
-            }).unwrap();
-            js_sys::Reflect::set(&obj, &"rollingHash".into(),
-                &js_sys::Uint8Array::from(&value.onchain.rolling_hash[..]).into()).unwrap();
-            js_sys::Reflect::set(&obj, &"blockHeight".into(),
-                &value.onchain.block_height.into()).unwrap();
-            js_sys::Reflect::set(&obj, &"receiptHash".into(), &match &value.receipt_hash {
-                Some(h) => js_sys::Uint8Array::from(&h[..]).into(),
-                None => JsValue::NULL,
-            }).unwrap();
-        }
-        libveritas::ProvableOption::Empty => {
-            js_sys::Reflect::set(&obj, &"type".into(), &"empty".into()).unwrap();
-        }
-        libveritas::ProvableOption::Unknown => {
-            js_sys::Reflect::set(&obj, &"type".into(), &"unknown".into()).unwrap();
-        }
-    }
-    obj.into()
-}
-
-fn zone_to_js(z: &libveritas::Zone) -> JsValue {
-    let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &"anchor".into(), &z.anchor.into()).unwrap();
-    js_sys::Reflect::set(&obj, &"sovereignty".into(), &z.sovereignty.to_string().into()).unwrap();
-    js_sys::Reflect::set(&obj, &"handle".into(), &z.handle.to_string().into()).unwrap();
-    js_sys::Reflect::set(&obj, &"alias".into(), &match &z.alias {
-        Some(a) => a.to_string().into(),
-        None => JsValue::NULL,
-    }).unwrap();
-    js_sys::Reflect::set(&obj, &"scriptPubkey".into(),
-        &js_sys::Uint8Array::from(z.script_pubkey.as_bytes()).into()).unwrap();
-    js_sys::Reflect::set(&obj, &"records".into(), &match &z.records {
-        Some(d) => js_sys::Uint8Array::from(d.as_slice()).into(),
-        None => JsValue::NULL,
-    }).unwrap();
-    js_sys::Reflect::set(&obj, &"fallbackRecords".into(), &match &z.fallback_records {
-        Some(d) => js_sys::Uint8Array::from(d.as_slice()).into(),
-        None => JsValue::NULL,
-    }).unwrap();
-    js_sys::Reflect::set(&obj, &"delegate".into(), &delegate_to_js(&z.delegate)).unwrap();
-    js_sys::Reflect::set(&obj, &"commitment".into(), &commitment_to_js(&z.commitment)).unwrap();
-    obj.into()
-}
-
-fn get_js_string(obj: &JsValue, key: &str) -> Option<String> {
-    js_sys::Reflect::get(obj, &key.into()).ok().and_then(|v| v.as_string())
-}
-
-fn get_js_u32(obj: &JsValue, key: &str) -> Option<u32> {
-    js_sys::Reflect::get(obj, &key.into()).ok().and_then(|v| v.as_f64()).map(|n| n as u32)
-}
-
-fn delegate_from_js(val: &JsValue) -> Result<libveritas::ProvableOption<libveritas::Delegate>, JsError> {
-    let dtype = get_js_string(val, "type")
-        .ok_or_else(|| JsError::new("delegate.type is required"))?;
-    match dtype.as_str() {
-        "exists" => {
-            let spk = get_optional_bytes(val, "scriptPubkey")
-                .ok_or_else(|| JsError::new("delegate.scriptPubkey is required"))?;
-            Ok(libveritas::ProvableOption::Exists {
-                value: libveritas::Delegate {
-                    script_pubkey: ScriptBuf::from_bytes(spk),
-                    records: get_optional_bytes(val, "records").map(|d| sip7::RecordSet::new(d)),
-                    fallback_records: get_optional_bytes(val, "fallbackRecords").map(|d| sip7::RecordSet::new(d)),
-                },
-            })
-        }
-        "empty" => Ok(libveritas::ProvableOption::Empty),
-        "unknown" => Ok(libveritas::ProvableOption::Unknown),
-        _ => Err(JsError::new(&format!("unknown delegate type: {dtype}"))),
-    }
-}
-
-fn bytes32_from_js(val: &JsValue, key: &str) -> Result<[u8; 32], JsError> {
-    let bytes = get_optional_bytes(val, key)
-        .ok_or_else(|| JsError::new(&format!("{key} is required")))?;
-    let arr: [u8; 32] = bytes.try_into()
-        .map_err(|_| JsError::new(&format!("{key} must be 32 bytes")))?;
-    Ok(arr)
-}
-
-fn optional_bytes32_from_js(val: &JsValue, key: &str) -> Result<Option<[u8; 32]>, JsError> {
-    match get_optional_bytes(val, key) {
-        Some(bytes) => {
-            let arr: [u8; 32] = bytes.try_into()
-                .map_err(|_| JsError::new(&format!("{key} must be 32 bytes")))?;
-            Ok(Some(arr))
-        }
-        None => Ok(None),
-    }
-}
-
-fn commitment_from_js(val: &JsValue) -> Result<libveritas::ProvableOption<libveritas::CommitmentInfo>, JsError> {
-    let ctype = get_js_string(val, "type")
-        .ok_or_else(|| JsError::new("commitment.type is required"))?;
-    match ctype.as_str() {
-        "exists" => {
-            Ok(libveritas::ProvableOption::Exists {
-                value: libveritas::CommitmentInfo {
-                    onchain: spaces_nums::Commitment {
-                        state_root: bytes32_from_js(val, "stateRoot")?,
-                        prev_root: optional_bytes32_from_js(val, "prevRoot")?,
-                        rolling_hash: bytes32_from_js(val, "rollingHash")?,
-                        block_height: get_js_u32(val, "blockHeight")
-                            .ok_or_else(|| JsError::new("commitment.blockHeight is required"))?,
-                    },
-                    receipt_hash: optional_bytes32_from_js(val, "receiptHash")?,
-                },
-            })
-        }
-        "empty" => Ok(libveritas::ProvableOption::Empty),
-        "unknown" => Ok(libveritas::ProvableOption::Unknown),
-        _ => Err(JsError::new(&format!("unknown commitment type: {ctype}"))),
-    }
+fn zone_to_js(z: &libveritas::Zone) -> Result<JsValue, JsError> {
+    to_js(z)
 }
 
 fn zone_from_js(val: &JsValue) -> Result<libveritas::Zone, JsError> {
-    let handle_str = get_js_string(val, "handle")
-        .ok_or_else(|| JsError::new("handle is required"))?;
-    let handle = SName::from_str(&handle_str)
-        .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
-    let alias = get_js_string(val, "alias")
-        .map(|a| SLabel::from_str_unprefixed(&a))
-        .transpose()
-        .map_err(|e| JsError::new(&format!("invalid alias: {e}")))?;
-    let spk = get_optional_bytes(val, "scriptPubkey")
-        .ok_or_else(|| JsError::new("scriptPubkey is required"))?;
-    let sovereignty_str = get_js_string(val, "sovereignty").unwrap_or_default();
-    let delegate_val = js_sys::Reflect::get(val, &"delegate".into())
-        .map_err(|_| JsError::new("delegate is required"))?;
-    let commitment_val = js_sys::Reflect::get(val, &"commitment".into())
-        .map_err(|_| JsError::new("commitment is required"))?;
-
-    Ok(libveritas::Zone {
-        anchor: get_js_u32(val, "anchor").unwrap_or(0),
-        sovereignty: match sovereignty_str.as_str() {
-            "sovereign" => libveritas::SovereigntyState::Sovereign,
-            "pending" => libveritas::SovereigntyState::Pending,
-            _ => libveritas::SovereigntyState::Dependent,
-        },
-        handle,
-        alias,
-        script_pubkey: ScriptBuf::from_bytes(spk),
-        records: get_optional_bytes(val, "records").map(|d| sip7::RecordSet::new(d)),
-        fallback_records: get_optional_bytes(val, "fallbackRecords").map(|d| sip7::RecordSet::new(d)),
-        delegate: delegate_from_js(&delegate_val)?,
-        commitment: commitment_from_js(&commitment_val)?,
-    })
+    let json = js_sys::JSON::stringify(val)
+        .map_err(|_| JsError::new("failed to stringify zone"))?;
+    let json_str = json.as_string()
+        .ok_or_else(|| JsError::new("stringify returned non-string"))?;
+    serde_json::from_str(&json_str)
+        .map_err(|e| JsError::new(&format!("invalid zone: {e}")))
 }
 
 /// A message containing chain proofs and handle data.
@@ -395,6 +220,26 @@ impl MessageBuilder {
 }
 
 #[wasm_bindgen]
+pub struct Anchors {
+    inner: Vec<RootAnchor>,
+}
+
+#[wasm_bindgen]
+impl Anchors {
+    #[wasm_bindgen(constructor)]
+    pub fn from_json(json: &str) -> Result<Anchors, JsError> {
+        let inner: Vec<RootAnchor> = serde_json::from_str(json)
+            .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
+        Ok(Anchors { inner })
+    }
+
+    #[wasm_bindgen(js_name = "computeAnchorSetHash")]
+    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
+        libveritas::compute_anchor_set_hash(&self.inner).to_vec()
+    }
+}
+
+#[wasm_bindgen]
 pub struct Veritas {
     inner: libveritas::Veritas,
 }
@@ -402,21 +247,17 @@ pub struct Veritas {
 #[wasm_bindgen]
 impl Veritas {
     #[wasm_bindgen(constructor)]
-    pub fn new(anchors: JsValue) -> Result<Veritas, JsError> {
-        let anchors: Vec<RootAnchor> = serde_wasm_bindgen::from_value(anchors)
-            .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
+    pub fn new(anchors: &Anchors) -> Result<Veritas, JsError> {
         let inner = libveritas::Veritas::new()
-            .with_anchors(anchors)
+            .with_anchors(anchors.inner.clone())
             .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(Veritas { inner })
     }
 
     #[wasm_bindgen(js_name = "withDevMode")]
-    pub fn with_dev_mode(anchors: JsValue) -> Result<Veritas, JsError> {
-        let anchors: Vec<RootAnchor> = serde_wasm_bindgen::from_value(anchors)
-            .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
+    pub fn with_dev_mode(anchors: &Anchors) -> Result<Veritas, JsError> {
         let inner = libveritas::Veritas::new()
-            .with_anchors(anchors)
+            .with_anchors(anchors.inner.clone())
             .map_err(|e| JsError::new(&e.to_string()))?
             .with_dev_mode(true);
         Ok(Veritas { inner })
@@ -467,12 +308,12 @@ pub struct VerifiedMessage {
 #[wasm_bindgen]
 impl VerifiedMessage {
     /// All verified zones as plain JS objects.
-    pub fn zones(&self) -> JsValue {
+    pub fn zones(&self) -> Result<JsValue, JsError> {
         let array = js_sys::Array::new();
         for z in &self.inner.zones {
-            array.push(&zone_to_js(z));
+            array.push(&zone_to_js(z)?);
         }
-        array.into()
+        Ok(array.into())
     }
 
     /// Get certificate for a specific handle (e.g. "alice@bitcoin").
@@ -731,7 +572,7 @@ pub fn verify_schnorr(msg_hash: &[u8], signature: &[u8], pubkey: &[u8]) -> Resul
 pub fn decode_zone(bytes: &[u8]) -> Result<JsValue, JsError> {
     let zone = libveritas::Zone::from_slice(bytes)
         .map_err(|e| JsError::new(&format!("invalid zone: {e}")))?;
-    Ok(zone_to_js(&zone))
+    zone_to_js(&zone)
 }
 
 /// Serialize a zone JS object to borsh bytes for storage.

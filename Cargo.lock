@@ -1378,6 +1378,7 @@ dependencies = [
  "serde_json",
  "sip7",
  "spaces_nums",
+ "spaces_protocol",
  "thiserror",
  "uniffi",
 ]

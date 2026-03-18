@@ -4,6 +4,8 @@ use libveritas::builder;
 use libveritas::msg;
 use libveritas::sname::SName;
 use spaces_nums::RootAnchor;
+use spaces_protocol::bitcoin::ScriptBuf;
+use spaces_protocol::slabel::SLabel;
 use std::str::FromStr;
 
 uniffi::setup_scaffolding!();
@@ -137,43 +139,29 @@ fn parse_update_entries(entries: &[UpdateEntry]) -> Result<Vec<builder::UpdateRe
 
 // -- Objects --
 
-#[derive(uniffi::Object)]
+#[derive(uniffi::Record)]
 pub struct Zone {
-    inner: libveritas::Zone,
+    pub anchor: u32,
+    pub sovereignty: String,
+    pub handle: String,
+    pub alias: Option<String>,
+    pub script_pubkey: Vec<u8>,
+    pub records: Option<Vec<u8>>,
+    pub fallback_records: Option<Vec<u8>>,
+    pub delegate: DelegateState,
+    pub commitment: CommitmentState,
 }
 
-#[uniffi::export]
-impl Zone {
-    pub fn anchor(&self) -> u32 {
-        self.inner.anchor
-    }
-
-    pub fn sovereignty(&self) -> String {
-        self.inner.sovereignty.to_string()
-    }
-
-    pub fn handle(&self) -> String {
-        self.inner.handle.to_string()
-    }
-
-    pub fn alias(&self) -> Option<String> {
-        self.inner.alias.as_ref().map(|a| a.to_string())
-    }
-
-    pub fn script_pubkey(&self) -> Vec<u8> {
-        self.inner.script_pubkey.as_bytes().to_vec()
-    }
-
-    pub fn fallback_records(&self) -> Option<Vec<u8>> {
-        self.inner.fallback_records.as_ref().map(|d| d.as_slice().to_vec())
-    }
-
-    pub fn records(&self) -> Option<Vec<u8>> {
-        self.inner.records.as_ref().map(|d| d.as_slice().to_vec())
-    }
-
-    pub fn delegate(&self) -> DelegateState {
-        match &self.inner.delegate {
+fn zone_from_inner(z: &libveritas::Zone) -> Zone {
+    Zone {
+        anchor: z.anchor,
+        sovereignty: z.sovereignty.to_string(),
+        handle: z.handle.to_string(),
+        alias: z.alias.as_ref().map(|a| a.to_string()),
+        script_pubkey: z.script_pubkey.as_bytes().to_vec(),
+        records: z.records.as_ref().map(|d| d.as_slice().to_vec()),
+        fallback_records: z.fallback_records.as_ref().map(|d| d.as_slice().to_vec()),
+        delegate: match &z.delegate {
             libveritas::ProvableOption::Exists { value } => DelegateState::Exists {
                 script_pubkey: value.script_pubkey.as_bytes().to_vec(),
                 fallback_records: value.fallback_records.as_ref().map(|d| d.as_slice().to_vec()),
@@ -181,11 +169,8 @@ impl Zone {
             },
             libveritas::ProvableOption::Empty => DelegateState::Empty,
             libveritas::ProvableOption::Unknown => DelegateState::Unknown,
-        }
-    }
-
-    pub fn commitment(&self) -> CommitmentState {
-        match &self.inner.commitment {
+        },
+        commitment: match &z.commitment {
             libveritas::ProvableOption::Exists { value } => CommitmentState::Exists {
                 state_root: value.onchain.state_root.to_vec(),
                 prev_root: value.onchain.prev_root.map(|r| r.to_vec()),
@@ -195,26 +180,80 @@ impl Zone {
             },
             libveritas::ProvableOption::Empty => CommitmentState::Empty,
             libveritas::ProvableOption::Unknown => CommitmentState::Unknown,
+        },
+    }
+}
+
+fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
+    let handle = SName::from_str(&z.handle).map_err(|e| VeritasError::InvalidInput {
+        message: format!("invalid handle: {e}"),
+    })?;
+    let alias = z.alias.as_ref()
+        .map(|a| SLabel::from_str_unprefixed(a))
+        .transpose()
+        .map_err(|e| VeritasError::InvalidInput {
+            message: format!("invalid alias: {e}"),
+        })?;
+    let delegate = match &z.delegate {
+        DelegateState::Exists { script_pubkey, fallback_records, records } => {
+            libveritas::ProvableOption::Exists {
+                value: libveritas::Delegate {
+                    script_pubkey: ScriptBuf::from_bytes(script_pubkey.clone()),
+                    fallback_records: fallback_records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
+                    records: records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
+                },
+            }
         }
-    }
+        DelegateState::Empty => libveritas::ProvableOption::Empty,
+        DelegateState::Unknown => libveritas::ProvableOption::Unknown,
+    };
+    let commitment = match &z.commitment {
+        CommitmentState::Exists { state_root, prev_root, rolling_hash, block_height, receipt_hash } => {
+            let mut sr = [0u8; 32];
+            sr.copy_from_slice(state_root);
+            let mut rh = [0u8; 32];
+            rh.copy_from_slice(rolling_hash);
+            let pr = prev_root.as_ref().map(|p| {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(p);
+                arr
+            });
+            let rh2 = receipt_hash.as_ref().map(|h| {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(h);
+                arr
+            });
+            libveritas::ProvableOption::Exists {
+                value: libveritas::CommitmentInfo {
+                    onchain: spaces_nums::Commitment {
+                        state_root: sr,
+                        prev_root: pr,
+                        rolling_hash: rh,
+                        block_height: *block_height,
+                    },
+                    receipt_hash: rh2,
+                },
+            }
+        }
+        CommitmentState::Empty => libveritas::ProvableOption::Empty,
+        CommitmentState::Unknown => libveritas::ProvableOption::Unknown,
+    };
 
-    pub fn is_better_than(&self, other: &Zone) -> Result<bool, VeritasError> {
-        self.inner
-            .is_better_than(&other.inner)
-            .map_err(|e| VeritasError::InvalidInput {
-                message: e.to_string(),
-            })
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.inner.to_bytes()
-    }
-
-    pub fn to_json(&self) -> Result<String, VeritasError> {
-        serde_json::to_string(&self.inner).map_err(|e| VeritasError::InvalidInput {
-            message: e.to_string(),
-        })
-    }
+    Ok(libveritas::Zone {
+        anchor: z.anchor,
+        sovereignty: match z.sovereignty.as_str() {
+            "sovereign" => libveritas::SovereigntyState::Sovereign,
+            "pending" => libveritas::SovereigntyState::Pending,
+            _ => libveritas::SovereigntyState::Dependent,
+        },
+        handle,
+        alias,
+        script_pubkey: ScriptBuf::from_bytes(z.script_pubkey.clone()),
+        records: z.records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
+        fallback_records: z.fallback_records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
+        delegate,
+        commitment,
+    })
 }
 
 #[derive(uniffi::Object)]
@@ -534,11 +573,11 @@ pub struct VerifiedMessage {
 
 #[uniffi::export]
 impl VerifiedMessage {
-    pub fn zones(&self) -> Vec<Arc<Zone>> {
+    pub fn zones(&self) -> Vec<Zone> {
         self.inner
             .zones
             .iter()
-            .map(|z| Arc::new(Zone { inner: z.clone() }))
+            .map(zone_from_inner)
             .collect()
     }
 
@@ -621,14 +660,38 @@ pub fn verify_schnorr(msg_hash: Vec<u8>, signature: Vec<u8>, pubkey: Vec<u8>) ->
     })
 }
 
-/// Decode stored zone bytes to JSON.
+/// Decode stored zone bytes to a Zone record.
 #[uniffi::export]
-pub fn decode_zone(bytes: Vec<u8>) -> Result<String, VeritasError> {
+pub fn decode_zone(bytes: Vec<u8>) -> Result<Zone, VeritasError> {
     let zone = libveritas::Zone::from_slice(&bytes)
         .map_err(|e| VeritasError::InvalidInput {
             message: format!("invalid zone: {e}"),
         })?;
-    serde_json::to_string(&zone).map_err(|e| VeritasError::InvalidInput {
+    Ok(zone_from_inner(&zone))
+}
+
+/// Serialize a Zone record to borsh bytes for storage.
+#[uniffi::export]
+pub fn zone_to_bytes(zone: Zone) -> Result<Vec<u8>, VeritasError> {
+    let inner = zone_to_inner(&zone)?;
+    Ok(inner.to_bytes())
+}
+
+/// Serialize a Zone record to JSON.
+#[uniffi::export]
+pub fn zone_to_json(zone: Zone) -> Result<String, VeritasError> {
+    let inner = zone_to_inner(&zone)?;
+    serde_json::to_string(&inner).map_err(|e| VeritasError::InvalidInput {
+        message: e.to_string(),
+    })
+}
+
+/// Compare two zones — returns true if `a` is fresher/better than `b`.
+#[uniffi::export]
+pub fn zone_is_better_than(a: Zone, b: Zone) -> Result<bool, VeritasError> {
+    let inner_a = zone_to_inner(&a)?;
+    let inner_b = zone_to_inner(&b)?;
+    inner_a.is_better_than(&inner_b).map_err(|e| VeritasError::InvalidInput {
         message: e.to_string(),
     })
 }

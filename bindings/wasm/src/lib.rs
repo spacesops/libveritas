@@ -279,6 +279,11 @@ impl Veritas {
         self.inner.newest_anchor()
     }
 
+    #[wasm_bindgen(js_name = "computeAnchorSetHash")]
+    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
+        self.inner.compute_anchor_set_hash().to_vec()
+    }
+
     pub fn is_finalized(&self, commitment_height: u32) -> bool {
         self.inner.is_finalized(commitment_height)
     }

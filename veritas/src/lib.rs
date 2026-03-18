@@ -392,6 +392,20 @@ impl BorshDeserialize for Zone {
     }
 }
 
+/// Compute a deterministic hash over an anchor set.
+///
+/// Useful for comparing whether two clients share the same anchor state.
+pub fn compute_anchor_set_hash(anchors: &[RootAnchor]) -> [u8; 32] {
+    let mut engine = sha256::Hash::engine();
+    for root in anchors {
+        engine.input(&root.block.hash[..]);
+        engine.input(&root.block.height.to_le_bytes());
+        engine.input(&root.spaces_root);
+        engine.input(&root.nums_root.unwrap_or([0u8; 32]));
+    }
+    sha256::Hash::from_engine(engine).to_byte_array()
+}
+
 pub fn hash_signable_message(msg: &[u8]) -> secp256k1::Message {
     let mut engine = sha256::Hash::engine();
     engine.input(SPACES_SIGNED_MSG_PREFIX);
@@ -707,6 +721,10 @@ impl Veritas {
 
     pub fn newest_anchor(&self) -> u32 {
         self.newest_anchor
+    }
+
+    pub fn compute_anchor_set_hash(&self) -> [u8; 32] {
+        compute_anchor_set_hash(&self.anchors)
     }
 
     pub fn is_finalized(&self, commitment_height: u32) -> bool {

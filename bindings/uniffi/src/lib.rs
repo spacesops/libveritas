@@ -359,6 +359,10 @@ impl Anchors {
             })?;
         Ok(Anchors { inner })
     }
+
+    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
+        libveritas::compute_anchor_set_hash(&self.inner).to_vec()
+    }
 }
 
 // ── Record / RecordSet ────────────────────────────────────────────
@@ -489,6 +493,10 @@ impl Veritas {
 
     pub fn newest_anchor(&self) -> u32 {
         self.inner.newest_anchor()
+    }
+
+    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
+        self.inner.compute_anchor_set_hash().to_vec()
     }
 
     pub fn is_finalized(&self, commitment_height: u32) -> bool {

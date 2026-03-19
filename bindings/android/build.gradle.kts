@@ -1,6 +1,5 @@
 plugins {
-    id("com.android.library") version "8.2.0"
-    id("org.jetbrains.kotlin.android") version "1.9.22"
+    id("com.android.library") version "9.0.1"
     `maven-publish`
     signing
 }
@@ -9,7 +8,7 @@ val libVersion: String = project.findProperty("version") as? String ?: "0.1.0"
 
 android {
     namespace = "org.spacesprotocol.libveritas"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 24
@@ -23,12 +22,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
-    kotlinOptions {
-        jvmTarget = "1.8"
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     publishing {

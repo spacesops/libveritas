@@ -14,10 +14,10 @@ uniffi::setup_scaffolding!();
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum VeritasError {
-    #[error("{message}")]
-    InvalidInput { message: String },
-    #[error("{message}")]
-    VerificationFailed { message: String },
+    #[error("{msg}")]
+    InvalidInput { msg: String },
+    #[error("{msg}")]
+    VerificationFailed { msg: String },
 }
 
 // -- Enums --
@@ -88,21 +88,21 @@ fn cert_to_record(c: &libveritas::cert::Certificate) -> Certificate {
 fn parse_data_update(entry: &DataUpdateEntry) -> Result<builder::DataUpdateRequest, VeritasError> {
     let handle = SName::from_str(&entry.name)
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid name '{}': {}", entry.name, e),
+            msg: format!("invalid name '{}': {}", entry.name, e),
         })?;
 
     let records = entry.records.as_ref()
         .map(|b| msg::OffchainRecords::from_slice(b))
         .transpose()
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid records: {e}"),
+            msg: format!("invalid records: {e}"),
         })?;
 
     let delegate_records = entry.delegate_records.as_ref()
         .map(|b| msg::OffchainRecords::from_slice(b))
         .transpose()
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid delegate_records: {e}"),
+            msg: format!("invalid delegate_records: {e}"),
         })?;
 
     Ok(builder::DataUpdateRequest {
@@ -127,7 +127,7 @@ fn parse_update_entry(entry: &UpdateEntry) -> Result<builder::UpdateRequest, Ver
         .map(|b| libveritas::cert::Certificate::from_slice(b))
         .transpose()
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid cert: {e}"),
+            msg: format!("invalid cert: {e}"),
         })?;
 
     Ok(builder::UpdateRequest { data, cert })
@@ -186,13 +186,13 @@ fn zone_from_inner(z: &libveritas::Zone) -> Zone {
 
 fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
     let handle = SName::from_str(&z.handle).map_err(|e| VeritasError::InvalidInput {
-        message: format!("invalid handle: {e}"),
+        msg: format!("invalid handle: {e}"),
     })?;
     let alias = z.alias.as_ref()
         .map(|a| SLabel::from_str_unprefixed(a))
         .transpose()
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid alias: {e}"),
+            msg: format!("invalid alias: {e}"),
         })?;
     let delegate = match &z.delegate {
         DelegateState::Exists { script_pubkey, fallback_records, records } => {
@@ -275,7 +275,7 @@ impl QueryContext {
     pub fn add_request(&self, handle: String) -> Result<(), VeritasError> {
         let sname = SName::from_str(&handle)
             .map_err(|e| VeritasError::InvalidInput {
-                message: format!("invalid handle: {e}"),
+                msg: format!("invalid handle: {e}"),
             })?;
         self.inner.write().unwrap().add_request(sname);
         Ok(())
@@ -284,7 +284,7 @@ impl QueryContext {
     /// Add a known zone from stored bytes (from a previous verification).
     pub fn add_zone(&self, zone_bytes: Vec<u8>) -> Result<(), VeritasError> {
         let zone = libveritas::Zone::from_slice(&zone_bytes).map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid zone: {e}"),
+            msg: format!("invalid zone: {e}"),
         })?;
         self.inner.write().unwrap().add_zone(zone);
         Ok(())
@@ -303,7 +303,7 @@ impl Message {
     pub fn new(bytes: Vec<u8>) -> Result<Self, VeritasError> {
         let inner = msg::Message::from_slice(&bytes)
             .map_err(|e| VeritasError::InvalidInput {
-                message: format!("invalid message: {e}"),
+                msg: format!("invalid message: {e}"),
             })?;
         Ok(Message { inner: RwLock::new(inner) })
     }
@@ -350,11 +350,11 @@ impl MessageBuilder {
         let builder = guard
             .as_ref()
             .ok_or_else(|| VeritasError::InvalidInput {
-                message: "builder already consumed by build()".to_string(),
+                msg: "builder already consumed by build()".to_string(),
             })?;
         serde_json::to_string(&builder.chain_proof_request())
             .map_err(|e| VeritasError::InvalidInput {
-                message: e.to_string(),
+                msg: e.to_string(),
             })
     }
 
@@ -368,16 +368,16 @@ impl MessageBuilder {
             .unwrap()
             .take()
             .ok_or_else(|| VeritasError::InvalidInput {
-                message: "builder already consumed by build()".to_string(),
+                msg: "builder already consumed by build()".to_string(),
             })?;
         let chain = msg::ChainProof::from_slice(&chain_proof)
             .map_err(|e| VeritasError::InvalidInput {
-                message: format!("invalid chain proof: {e}"),
+                msg: format!("invalid chain proof: {e}"),
             })?;
         let msg = builder
             .build(chain)
             .map_err(|e| VeritasError::InvalidInput {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?;
         Ok(Arc::new(Message { inner: RwLock::new(msg) }))
     }
@@ -394,7 +394,7 @@ impl Anchors {
     pub fn from_json(json: String) -> Result<Self, VeritasError> {
         let inner: Vec<RootAnchor> = serde_json::from_str(&json)
             .map_err(|e| VeritasError::InvalidInput {
-                message: format!("invalid anchors: {e}"),
+                msg: format!("invalid anchors: {e}"),
             })?;
         Ok(Anchors { inner })
     }
@@ -456,7 +456,7 @@ impl RecordSet {
     pub fn pack(records: Vec<Record>) -> Result<Self, VeritasError> {
         let sip_records: Vec<sip7::Record> = records.into_iter().map(Into::into).collect();
         let inner = sip7::RecordSet::pack(sip_records)
-            .map_err(|e| VeritasError::InvalidInput { message: e.to_string() })?;
+            .map_err(|e| VeritasError::InvalidInput { msg: e.to_string() })?;
         Ok(RecordSet { inner })
     }
 
@@ -469,7 +469,7 @@ impl RecordSet {
     pub fn unpack(&self) -> Result<Vec<Record>, VeritasError> {
         self.inner.unpack()
             .map(|records| records.into_iter().map(Into::into).collect())
-            .map_err(|e| VeritasError::InvalidInput { message: e.to_string() })
+            .map_err(|e| VeritasError::InvalidInput { msg: e.to_string() })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -489,7 +489,7 @@ impl RecordSet {
 #[uniffi::export]
 pub fn create_offchain_records(record_set: &RecordSet, signature: Vec<u8>) -> Result<Vec<u8>, VeritasError> {
     let sig: [u8; 64] = signature.try_into().map_err(|_| VeritasError::InvalidInput {
-        message: "signature must be 64 bytes".to_string(),
+        msg: "signature must be 64 bytes".to_string(),
     })?;
     let offchain = msg::OffchainRecords::new(
         record_set.inner.clone(),
@@ -510,7 +510,7 @@ impl Veritas {
         let inner = libveritas::Veritas::new()
             .with_anchors(anchors.inner.clone())
             .map_err(|e| VeritasError::InvalidInput {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?;
         Ok(Veritas { inner })
     }
@@ -520,7 +520,7 @@ impl Veritas {
         let inner = libveritas::Veritas::new()
             .with_anchors(anchors.inner.clone())
             .map_err(|e| VeritasError::InvalidInput {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?
             .with_dev_mode(true);
         Ok(Veritas { inner })
@@ -559,7 +559,7 @@ impl Veritas {
             .inner
             .verify_message(&ctx_guard, msg_inner.clone())
             .map_err(|e| VeritasError::VerificationFailed {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?;
 
         Ok(Arc::new(VerifiedMessage { inner }))
@@ -586,7 +586,7 @@ impl VerifiedMessage {
         handle: String,
     ) -> Result<Option<Certificate>, VeritasError> {
         let sname = SName::from_str(&handle).map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid handle: {e}"),
+            msg: format!("invalid handle: {e}"),
         })?;
         Ok(self.inner.certificate(&sname).map(|c| cert_to_record(&c)))
     }
@@ -629,13 +629,13 @@ pub fn hash_signable_message(msg: Vec<u8>) -> Vec<u8> {
 #[uniffi::export]
 pub fn verify_spaces_message(msg: Vec<u8>, signature: Vec<u8>, pubkey: Vec<u8>) -> Result<(), VeritasError> {
     let sig: [u8; 64] = signature.try_into().map_err(|_| VeritasError::InvalidInput {
-        message: "signature must be 64 bytes".to_string(),
+        msg: "signature must be 64 bytes".to_string(),
     })?;
     let pk: [u8; 32] = pubkey.try_into().map_err(|_| VeritasError::InvalidInput {
-        message: "pubkey must be 32 bytes".to_string(),
+        msg: "pubkey must be 32 bytes".to_string(),
     })?;
     libveritas::verify_spaces_message(&msg, &sig, &pk).map_err(|e| VeritasError::VerificationFailed {
-        message: e.to_string(),
+        msg: e.to_string(),
     })
 }
 
@@ -647,16 +647,16 @@ pub fn verify_spaces_message(msg: Vec<u8>, signature: Vec<u8>, pubkey: Vec<u8>) 
 #[uniffi::export]
 pub fn verify_schnorr(msg_hash: Vec<u8>, signature: Vec<u8>, pubkey: Vec<u8>) -> Result<(), VeritasError> {
     let hash: [u8; 32] = msg_hash.try_into().map_err(|_| VeritasError::InvalidInput {
-        message: "msg_hash must be 32 bytes".to_string(),
+        msg: "msg_hash must be 32 bytes".to_string(),
     })?;
     let sig: [u8; 64] = signature.try_into().map_err(|_| VeritasError::InvalidInput {
-        message: "signature must be 64 bytes".to_string(),
+        msg: "signature must be 64 bytes".to_string(),
     })?;
     let pk: [u8; 32] = pubkey.try_into().map_err(|_| VeritasError::InvalidInput {
-        message: "pubkey must be 32 bytes".to_string(),
+        msg: "pubkey must be 32 bytes".to_string(),
     })?;
     libveritas::verify_schnorr(&hash, &sig, &pk).map_err(|e| VeritasError::VerificationFailed {
-        message: e.to_string(),
+        msg: e.to_string(),
     })
 }
 
@@ -665,7 +665,7 @@ pub fn verify_schnorr(msg_hash: Vec<u8>, signature: Vec<u8>, pubkey: Vec<u8>) ->
 pub fn decode_zone(bytes: Vec<u8>) -> Result<Zone, VeritasError> {
     let zone = libveritas::Zone::from_slice(&bytes)
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid zone: {e}"),
+            msg: format!("invalid zone: {e}"),
         })?;
     Ok(zone_from_inner(&zone))
 }
@@ -682,7 +682,7 @@ pub fn zone_to_bytes(zone: Zone) -> Result<Vec<u8>, VeritasError> {
 pub fn zone_to_json(zone: Zone) -> Result<String, VeritasError> {
     let inner = zone_to_inner(&zone)?;
     serde_json::to_string(&inner).map_err(|e| VeritasError::InvalidInput {
-        message: e.to_string(),
+        msg: e.to_string(),
     })
 }
 
@@ -692,7 +692,7 @@ pub fn zone_is_better_than(a: Zone, b: Zone) -> Result<bool, VeritasError> {
     let inner_a = zone_to_inner(&a)?;
     let inner_b = zone_to_inner(&b)?;
     inner_a.is_better_than(&inner_b).map_err(|e| VeritasError::InvalidInput {
-        message: e.to_string(),
+        msg: e.to_string(),
     })
 }
 
@@ -701,9 +701,9 @@ pub fn zone_is_better_than(a: Zone, b: Zone) -> Result<bool, VeritasError> {
 pub fn decode_certificate(bytes: Vec<u8>) -> Result<String, VeritasError> {
     let cert = libveritas::cert::Certificate::from_slice(&bytes)
         .map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid certificate: {e}"),
+            msg: format!("invalid certificate: {e}"),
         })?;
     serde_json::to_string(&cert).map_err(|e| VeritasError::InvalidInput {
-        message: e.to_string(),
+        msg: e.to_string(),
     })
 }

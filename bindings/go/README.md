@@ -58,7 +58,7 @@ func main() {
 Requires [Rust](https://rustup.rs/) and [uniffi-bindgen-go](https://github.com/NordSecurity/uniffi-bindgen-go):
 
 ```bash
-cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.4.0+v0.28.3
+cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.5.0+v0.29.5
 
 # Build the shared library
 cargo build -p libveritas-uniffi --release

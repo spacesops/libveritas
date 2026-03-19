@@ -56,7 +56,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install uniffi-bindgen-go
-        run: cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.4.0+v0.28.3
+        run: cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.5.0+v0.29.5
 
       - name: Build library (produces .so for bindgen + .a for linux-amd64)
         run: cargo build -p libveritas-uniffi --release

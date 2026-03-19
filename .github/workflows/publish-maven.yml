@@ -63,6 +63,10 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      - name: Generate Gradle wrapper
+        working-directory: bindings/android
+        run: gradle wrapper
+
       - name: Build and publish AAR
         working-directory: bindings/android
         run: |

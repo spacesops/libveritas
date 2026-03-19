@@ -14,10 +14,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact: linux-amd64
-            lib: liblibveritas_uniffi.a
           - runner: macos-latest
             target: aarch64-apple-darwin
             artifact: darwin-arm64
@@ -39,6 +35,8 @@ jobs:
 
       - name: Build static library
         run: cargo build -p libveritas-uniffi --release
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
 
       - name: Upload static library
         uses: actions/upload-artifact@v4
@@ -60,7 +58,7 @@ jobs:
       - name: Install uniffi-bindgen-go
         run: cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.4.0+v0.28.3
 
-      - name: Build shared library for binding generation
+      - name: Build library (produces .so for bindgen + .a for linux-amd64)
         run: cargo build -p libveritas-uniffi --release
 
       - name: Generate Go bindings
@@ -80,9 +78,10 @@ jobs:
           mkdir -p go-publish/native/darwin-arm64
           mkdir -p go-publish/native/windows-amd64
 
-          cp artifacts/linux-amd64/liblibveritas_uniffi.a   go-publish/native/linux-amd64/
-          cp artifacts/darwin-arm64/liblibveritas_uniffi.a   go-publish/native/darwin-arm64/
-          cp artifacts/windows-amd64/libveritas_uniffi.lib   go-publish/native/windows-amd64/
+          # Linux .a from this job's own build (same build that generated the Go bindings)
+          cp target/release/liblibveritas_uniffi.a            go-publish/native/linux-amd64/
+          cp artifacts/darwin-arm64/liblibveritas_uniffi.a    go-publish/native/darwin-arm64/
+          cp artifacts/windows-amd64/libveritas_uniffi.lib    go-publish/native/windows-amd64/
 
       - name: Patch Go file with cgo directives
         run: |

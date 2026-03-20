@@ -231,10 +231,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.KOTLIN_PUBLISH_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
-          fi
+          VERSION="v${VERSION}"
 
           cd kotlin-publish
 

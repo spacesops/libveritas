@@ -67,6 +67,7 @@ jobs:
             --library target/release/liblibveritas_uniffi.so \
             --out-dir go-gen/
           # Move from subdirectory to repo root so import is github.com/spacesprotocol/libveritas-go
+          mkdir -p go-publish
           mv go-gen/libveritas_uniffi/* go-publish/
           rm -rf go-gen
           # Rename Go package from libveritas_uniffi to libveritas

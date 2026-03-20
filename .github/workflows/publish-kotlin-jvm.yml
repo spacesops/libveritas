@@ -22,7 +22,7 @@ jobs:
             target: aarch64-apple-darwin
             artifact: darwin-aarch64
             lib: liblibveritas_uniffi.dylib
-          - runner: macos-13
+          - runner: macos-latest
             target: x86_64-apple-darwin
             artifact: darwin-x86-64
             lib: liblibveritas_uniffi.dylib

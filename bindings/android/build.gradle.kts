@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.library") version "9.0.1"
     `maven-publish`
@@ -84,7 +86,7 @@ publishing {
                 name = "Authorization"
                 val user = System.getenv("CENTRAL_PORTAL_USERNAME") ?: ""
                 val pass = System.getenv("CENTRAL_PORTAL_PASSWORD") ?: ""
-                value = "Bearer " + java.util.Base64.getEncoder().encodeToString("$user:$pass".toByteArray())
+                value = "Bearer " + Base64.getEncoder().encodeToString("$user:$pass".toByteArray())
             }
             authentication {
                 create<HttpHeaderAuthentication>("header")

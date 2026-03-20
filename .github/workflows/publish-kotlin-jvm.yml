@@ -26,6 +26,10 @@ jobs:
             target: x86_64-apple-darwin
             artifact: darwin-x86-64
             lib: liblibveritas_uniffi.dylib
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: win32-x86-64
+            lib: libveritas_uniffi.dll
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -79,10 +83,12 @@ jobs:
           mkdir -p kotlin-publish/src/main/resources/linux-x86-64
           mkdir -p kotlin-publish/src/main/resources/darwin-aarch64
           mkdir -p kotlin-publish/src/main/resources/darwin-x86-64
+          mkdir -p kotlin-publish/src/main/resources/win32-x86-64
 
           cp artifacts/linux-x86-64/liblibveritas_uniffi.so     kotlin-publish/src/main/resources/linux-x86-64/
           cp artifacts/darwin-aarch64/liblibveritas_uniffi.dylib kotlin-publish/src/main/resources/darwin-aarch64/
           cp artifacts/darwin-x86-64/liblibveritas_uniffi.dylib  kotlin-publish/src/main/resources/darwin-x86-64/
+          cp artifacts/win32-x86-64/libveritas_uniffi.dll        kotlin-publish/src/main/resources/win32-x86-64/
 
       - name: Set version
         run: |
@@ -115,6 +121,11 @@ jobs:
 
           kotlin {
               jvmToolchain(17)
+          }
+
+          java {
+              withSourcesJar()
+              withJavadocJar()
           }
 
           publishing {

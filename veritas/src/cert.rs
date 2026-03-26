@@ -15,7 +15,7 @@ use spaces_nums::num_id::NumId;
 use crate::sname::{Label, NameLike, SName};
 
 /// Current certificate version.
-pub const CERTIFICATE_VERSION: u8 = 2;
+pub const CERTIFICATE_VERSION: u8 = 0;
 
 /// Magic bytes identifying a `.spacecert` file.
 const CHAIN_MAGIC: &[u8; 4] = b"SCRT";

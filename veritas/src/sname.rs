@@ -142,18 +142,11 @@ impl SName {
         SNameRef(&self.0)
     }
 
-    pub fn from_space(space: &SLabel) -> Result<Self, Error> {
+    pub fn from_space(space: &SLabel) -> Self {
         let space_bytes = space.as_ref();
-        if space_bytes.is_empty() {
-            return Err(Error::Empty);
-        }
-        if space_bytes.len() + 1 > MAX_SPACE_LEN {
-            return Err(Error::TooLong);
-        }
-
         let mut buf = [0u8; MAX_SPACE_LEN];
         buf[..space_bytes.len()].copy_from_slice(space_bytes);
-        Ok(SName(buf))
+        SName(buf)
     }
 
     pub fn join(label: &Label, space: &SLabel) -> Result<Self, Error> {
@@ -193,6 +186,12 @@ impl SName {
         let s = std::str::from_utf8(second_to_last).ok()?;
         let slabel = SLabel::from_str_unprefixed(s).ok()?;
         Some(Label(slabel))
+    }
+}
+
+impl From<&SLabel> for SName {
+    fn from(space: &SLabel) -> Self {
+        SName::from_space(space)
     }
 }
 

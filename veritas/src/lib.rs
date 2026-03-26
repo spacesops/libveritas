@@ -106,7 +106,7 @@ impl<'a> Iterator for CertificateIter<'a> {
             self.handles = None;
 
             // Emit root cert if zone exists
-            let root_handle = SName::from_space(&bundle.subject).ok()?;
+            let root_handle = SName::from_space(&bundle.subject);
             if self.zones.iter().any(|z| z.canonical == root_handle) {
                 return Some(Certificate::new(
                     root_handle,
@@ -789,8 +789,7 @@ impl Veritas {
         let cached_parent = ctx.get_parent_zone(&space);
         let mut extracted = self.extract_parent_zone(chain, &bundle)?;
 
-        let root_handle = SName::from_space(&space)
-            .map_err(|_| MessageError::InvalidSubject { subject: space.to_string() })?;
+        let root_handle = SName::from_space(&space);
 
         let mut zones: Vec<Zone> = Vec::new();
         let mut receipt_verified = false;
@@ -1043,8 +1042,7 @@ impl Veritas {
                 .map(|d| sip7::RecordSet::new(d.to_vec())))
         };
 
-        let handle = SName::from_space(&bundle.subject)
-            .map_err(|_| MessageError::InvalidSubject { subject: bundle.subject.to_string() })?;
+        let handle = SName::from_space(&bundle.subject);
 
         let mut z = Zone {
             anchor: chain.anchor.height,

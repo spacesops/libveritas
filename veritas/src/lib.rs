@@ -106,7 +106,7 @@ impl<'a> Iterator for CertificateIter<'a> {
             self.handles = None;
 
             // Emit root cert if zone exists
-            let root_handle = SName::from_space(&bundle.subject).ok()?;
+            let root_handle = SName::from_space(&bundle.subject);
             if self.zones.iter().any(|z| z.canonical == root_handle) {
                 return Some(Certificate::new(
                     root_handle,
@@ -789,8 +789,7 @@ impl Veritas {
         let cached_parent = ctx.get_parent_zone(&space);
         let mut extracted = self.extract_parent_zone(chain, &bundle)?;
 
-        let root_handle = SName::from_space(&space)
-            .map_err(|_| MessageError::InvalidSubject { subject: space.to_string() })?;
+        let root_handle = SName::from_space(&space);
 
         let mut zones: Vec<Zone> = Vec::new();
         let mut receipt_verified = false;
@@ -1043,8 +1042,7 @@ impl Veritas {
                 .map(|d| sip7::RecordSet::new(d.to_vec())))
         };
 
-        let handle = SName::from_space(&bundle.subject)
-            .map_err(|_| MessageError::InvalidSubject { subject: bundle.subject.to_string() })?;
+        let handle = SName::from_space(&bundle.subject);
 
         let mut z = Zone {
             anchor: chain.anchor.height,
@@ -1259,8 +1257,6 @@ pub enum MessageError {
     DuplicateSpace { space: String },
     /// Receipt journal could not be decoded
     MalformedReceipt { space: String, reason: String },
-    /// Receipt space hash doesn't match the bundle's space
-    ReceiptSpaceMismatch { space: String },
     /// Receipt policy IDs don't match expected values
     ReceiptPolicyMismatch { space: String },
     /// Spaces proof root doesn't match anchor
@@ -1331,9 +1327,6 @@ impl fmt::Display for MessageError {
             }
             Self::MalformedReceipt { space, reason } => {
                 write!(f, "malformed receipt for {}: {}", space, reason)
-            }
-            Self::ReceiptSpaceMismatch { space } => {
-                write!(f, "receipt space mismatch for {}", space)
             }
             Self::ReceiptPolicyMismatch { space } => {
                 write!(f, "receipt policy mismatch for {}", space)
@@ -1499,13 +1492,8 @@ where
     }
 }
 
-
 fn verify_zk_journal_matches_onchain(space: &SLabel, zk: &libveritas_zk::guest::Commitment, onchain: &spaces_nums::Commitment) -> Result<(), MessageError> {
     let space_str = space.to_string();
-    let space_hash = Sha256Hasher::hash(space.as_ref());
-    if zk.subject != space_hash {
-        return Err(MessageError::ReceiptSpaceMismatch { space: space_str });
-    }
     if zk.policy_fold != constants::FOLD_ID || zk.policy_step != constants::STEP_ID {
         return Err(MessageError::ReceiptPolicyMismatch { space: space_str });
     }

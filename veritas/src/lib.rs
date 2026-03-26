@@ -1257,8 +1257,6 @@ pub enum MessageError {
     DuplicateSpace { space: String },
     /// Receipt journal could not be decoded
     MalformedReceipt { space: String, reason: String },
-    /// Receipt space hash doesn't match the bundle's space
-    ReceiptSpaceMismatch { space: String },
     /// Receipt policy IDs don't match expected values
     ReceiptPolicyMismatch { space: String },
     /// Spaces proof root doesn't match anchor
@@ -1329,9 +1327,6 @@ impl fmt::Display for MessageError {
             }
             Self::MalformedReceipt { space, reason } => {
                 write!(f, "malformed receipt for {}: {}", space, reason)
-            }
-            Self::ReceiptSpaceMismatch { space } => {
-                write!(f, "receipt space mismatch for {}", space)
             }
             Self::ReceiptPolicyMismatch { space } => {
                 write!(f, "receipt policy mismatch for {}", space)
@@ -1497,13 +1492,8 @@ where
     }
 }
 
-
 fn verify_zk_journal_matches_onchain(space: &SLabel, zk: &libveritas_zk::guest::Commitment, onchain: &spaces_nums::Commitment) -> Result<(), MessageError> {
     let space_str = space.to_string();
-    let space_hash = Sha256Hasher::hash(space.as_ref());
-    if zk.subject != space_hash {
-        return Err(MessageError::ReceiptSpaceMismatch { space: space_str });
-    }
     if zk.policy_fold != constants::FOLD_ID || zk.policy_step != constants::STEP_ID {
         return Err(MessageError::ReceiptPolicyMismatch { space: space_str });
     }

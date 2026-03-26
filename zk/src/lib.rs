@@ -18,14 +18,10 @@ impl<'a> BatchReader<'a> {
     pub fn new(data: &'a [u8]) -> Self {
         BatchReader(data)
     }
-
-    pub fn space_hash(&self) -> &'a [u8] {
-        &self.0[..32]
-    }
-
+    
     pub fn iter(&self) -> BodyIterator<'a> {
         BodyIterator {
-            data: &self.0[32..],
+            data: &self.0,
         }
     }
 }

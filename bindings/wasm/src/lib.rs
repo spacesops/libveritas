@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::*;
 
 use libveritas::builder;
 use libveritas::msg;
-use libveritas::sname::SName;
+use libveritas::spaces_protocol::sname::SName;
 use serde::Serialize;
 use spaces_nums::RootAnchor;
 
@@ -43,19 +43,21 @@ fn parse_data_update(entry: &JsValue) -> Result<builder::DataUpdateRequest, JsEr
         .map_err(|e| JsError::new(&format!("invalid name '{}': {}", name, e)))?;
 
     let records = get_optional_bytes(entry, "records")
-        .map(|b| msg::OffchainRecords::from_slice(&b))
-        .transpose()
-        .map_err(|e| JsError::new(&format!("invalid records: {e}")))?;
+        .map(sip7::RecordSet::new);
 
     let delegate_records = get_optional_bytes(entry, "delegateRecords")
-        .map(|b| msg::OffchainRecords::from_slice(&b))
-        .transpose()
-        .map_err(|e| JsError::new(&format!("invalid delegate_records: {e}")))?;
+        .map(sip7::RecordSet::new);
+
+    let rev = js_sys::Reflect::get(entry, &"rev".into())
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     Ok(builder::DataUpdateRequest {
         handle,
         records,
         delegate_records,
+        rev,
     })
 }
 
@@ -171,6 +173,18 @@ impl Message {
         self.inner.update(reqs);
         Ok(())
     }
+
+    /// Set the signature on an unsigned record set.
+    ///
+    /// `signer` is the canonical signer name from the unsigned record.
+    /// `signature` is the 64-byte Schnorr signature.
+    #[wasm_bindgen(js_name = "setSignature")]
+    pub fn set_signature(&mut self, signer: &str, signature: &[u8]) -> Result<(), JsError> {
+        let sname = SName::from_str(signer)
+            .map_err(|e| JsError::new(&format!("invalid signer: {e}")))?;
+        self.inner.set_signature(&sname, signature.to_vec());
+        Ok(())
+    }
 }
 
 /// Builder for constructing messages from update requests and chain proofs.
@@ -200,14 +214,13 @@ impl MessageBuilder {
             .ok_or_else(|| JsError::new("builder already consumed by build()"))
     }
 
-    /// Add a .spacecert chain with records.
+    /// Add a .spacecert chain with records (sip7 wire bytes).
     #[wasm_bindgen(js_name = "addHandle")]
-    pub fn add_handle(&mut self, chain_bytes: &[u8], records_bytes: &[u8]) -> Result<(), JsError> {
+    pub fn add_handle(&mut self, chain_bytes: &[u8], records_bytes: &[u8], rev: bool) -> Result<(), JsError> {
         let chain = libveritas::cert::CertificateChain::from_slice(chain_bytes)
             .map_err(|e| JsError::new(&format!("invalid chain: {e}")))?;
-        let records = msg::OffchainRecords::from_slice(records_bytes)
-            .map_err(|e| JsError::new(&format!("invalid records: {e}")))?;
-        self.inner_mut()?.add_handle(chain, records);
+        let records = sip7::RecordSet::new(records_bytes.to_vec());
+        self.inner_mut()?.add_handle(chain, records, rev);
         Ok(())
     }
 
@@ -229,14 +242,13 @@ impl MessageBuilder {
         Ok(())
     }
 
-    /// Add records for a handle.
+    /// Add records for a handle (sip7 wire bytes).
     #[wasm_bindgen(js_name = "addRecords")]
-    pub fn add_records(&mut self, handle: &str, records_bytes: &[u8]) -> Result<(), JsError> {
+    pub fn add_records(&mut self, handle: &str, records_bytes: &[u8], rev: bool) -> Result<(), JsError> {
         let sname = SName::from_str(handle)
             .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
-        let records = msg::OffchainRecords::from_slice(records_bytes)
-            .map_err(|e| JsError::new(&format!("invalid records: {e}")))?;
-        self.inner_mut()?.add_records(sname, records);
+        let records = sip7::RecordSet::new(records_bytes.to_vec());
+        self.inner_mut()?.add_records(sname, records, rev);
         Ok(())
     }
 
@@ -263,17 +275,37 @@ impl MessageBuilder {
     /// Build the message from a borsh-encoded ChainProof.
     ///
     /// Consumes the builder — cannot be called twice.
-    pub fn build(&mut self, chain_proof: &[u8]) -> Result<Message, JsError> {
+    ///
+    /// Returns `{ message, unsigned }` where `unsigned` is an array of
+    /// `{ handle, signer, signingId }` for each record set that needs signing.
+    /// After signing, call `message.setSignature(signer, sig)` for each.
+    pub fn build(&mut self, chain_proof: &[u8]) -> Result<JsValue, JsError> {
         let builder = self
             .inner
             .take()
             .ok_or_else(|| JsError::new("builder already consumed by build()"))?;
         let chain = msg::ChainProof::from_slice(chain_proof)
             .map_err(|e| JsError::new(&format!("invalid chain proof: {e}")))?;
-        let msg = builder
+        let (inner_msg, unsigned) = builder
             .build(chain)
             .map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(Message { inner: msg })
+
+        let unsigned_arr = js_sys::Array::new();
+        for u in &unsigned {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(&obj, &"handle".into(), &u.handle.to_string().into()).unwrap();
+            js_sys::Reflect::set(&obj, &"signer".into(), &u.signer.to_string().into()).unwrap();
+            let id = js_sys::Uint8Array::new_with_length(32);
+            id.copy_from(&u.signing_id);
+            js_sys::Reflect::set(&obj, &"signingId".into(), &id).unwrap();
+            unsigned_arr.push(&obj);
+        }
+
+        let result = js_sys::Object::new();
+        let message = Message { inner: inner_msg };
+        js_sys::Reflect::set(&result, &"message".into(), &message.into()).unwrap();
+        js_sys::Reflect::set(&result, &"unsigned".into(), &unsigned_arr).unwrap();
+        Ok(result.into())
     }
 }
 
@@ -515,7 +547,8 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
             } else {
                 return Err(JsError::new("txt record: 'value' must be a string or array of strings"));
             };
-            Ok(sip7::Record::txts(&key, values))
+            let refs: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
+            Ok(sip7::Record::txt(&key, &refs))
         }
         "blob" => {
             let key = js_sys::Reflect::get(obj, &"key".into())
@@ -525,6 +558,26 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
                 .map(|v| js_sys::Uint8Array::from(v).to_vec())
                 .map_err(|_| JsError::new("blob record: 'value' must be a Uint8Array"))?;
             Ok(sip7::Record::blob(&key, value))
+        }
+        "sig" => {
+            let signer = js_sys::Reflect::get(obj, &"signer".into())
+                .ok().and_then(|v| v.as_string())
+                .ok_or_else(|| JsError::new("sig record: 'signer' must be a string"))?;
+            let rev = js_sys::Reflect::get(obj, &"rev".into())
+                .ok().and_then(|v| v.as_string())
+                .unwrap_or_default();
+            let sig = js_sys::Reflect::get(obj, &"sig".into())
+                .map(|v| js_sys::Uint8Array::from(v).to_vec())
+                .map_err(|_| JsError::new("sig record: 'sig' must be a Uint8Array"))?;
+            let signer = SName::from_str(&signer)
+                .map_err(|e| JsError::new(&format!("sig record: invalid signer: {e}")))?;
+            let rev = if rev.is_empty() {
+                SName::empty()
+            } else {
+                SName::from_str(&rev)
+                    .map_err(|e| JsError::new(&format!("sig record: invalid rev: {e}")))?
+            };
+            Ok(sip7::Record::sig(signer, rev, sig))
         }
         "unknown" => {
             let rt = js_sys::Reflect::get(obj, &"rtype".into())
@@ -544,7 +597,7 @@ fn txt_to_js(key: &str, value: &[String]) -> JsValue {
     for v in value {
         arr.push(&v.into());
     }
-    Record::txts(key, arr.into())
+    Record::txt(key, arr.into())
 }
 
 fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
@@ -552,6 +605,11 @@ fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
         sip7::Record::Seq(version) => Record::seq(*version),
         sip7::Record::Txt { key, value } => txt_to_js(key, value),
         sip7::Record::Blob { key, value } => Record::blob(key, value),
+        sip7::Record::Sig { signer, rev, sig } => Record::sig(
+            &signer.to_string(),
+            &rev.to_string(),
+            sig,
+        ),
         sip7::Record::Unknown { rtype, rdata } => Record::unknown(*rtype, rdata),
     }
 }
@@ -577,12 +635,7 @@ impl Record {
         obj.into()
     }
 
-    pub fn txt(key: &str, value: &str) -> JsValue {
-        let arr = js_sys::Array::of1(&value.into());
-        Record::txts(key, arr.into())
-    }
-
-    pub fn txts(key: &str, value: JsValue) -> JsValue {
+    pub fn txt(key: &str, value: JsValue) -> JsValue {
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"type".into(), &"txt".into()).unwrap();
         js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
@@ -595,6 +648,15 @@ impl Record {
         js_sys::Reflect::set(&obj, &"type".into(), &"blob".into()).unwrap();
         js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
         js_sys::Reflect::set(&obj, &"value".into(), &js_sys::Uint8Array::from(value)).unwrap();
+        obj.into()
+    }
+
+    pub fn sig(signer: &str, rev: &str, sig: &[u8]) -> JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"type".into(), &"sig".into()).unwrap();
+        js_sys::Reflect::set(&obj, &"signer".into(), &signer.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"rev".into(), &rev.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"sig".into(), &js_sys::Uint8Array::from(sig)).unwrap();
         obj.into()
     }
 
@@ -673,23 +735,6 @@ impl RecordSet {
     }
 }
 
-/// Create borsh-encoded OffchainRecords from a RecordSet and 64-byte Schnorr signature.
-///
-/// ```js
-/// const rs = RecordSet.pack([Record.seq(0), Record.txt("btc", "bc1qtest")]);
-/// const sig = await wallet.signSchnorr(rs.signingId());
-/// const bytes = createOffchainRecords(rs, sig);
-/// ```
-#[wasm_bindgen(js_name = "createOffchainRecords")]
-pub fn create_offchain_records(record_set: &RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
-    let sig: [u8; 64] = signature.try_into()
-        .map_err(|_| JsError::new("signature must be 64 bytes"))?;
-    let offchain = msg::OffchainRecords::new(
-        record_set.inner.clone(),
-        libveritas::cert::Signature(sig),
-    );
-    Ok(offchain.to_bytes())
-}
 
 /// Hash a message with the Spaces signed-message prefix (SHA256).
 /// Returns the 32-byte digest suitable for Schnorr signing/verification.

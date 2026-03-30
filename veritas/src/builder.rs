@@ -1,16 +1,20 @@
 use std::collections::HashMap;
 use crate::cert::{Certificate, CertificateChain, ChainProofRequestUtils, Witness};
-use crate::msg::{ChainProof, Message, OffchainRecords};
+use crate::msg::{self, ChainProof, Message, UnsignedRecord};
 use crate::names::NameResolver;
-use crate::sname::{NameLike, SName};
+use spaces_protocol::sname::{NameLike, SName};
 use crate::MessageError;
 use spaces_nums::ChainProofRequest;
 use spaces_protocol::slabel::SLabel;
 
 pub struct DataUpdateRequest {
     pub handle: SName,
-    pub records: Option<OffchainRecords>,
-    pub delegate_records: Option<OffchainRecords>,
+    pub records: Option<sip7::RecordSet>,
+    pub delegate_records: Option<sip7::RecordSet>,
+    /// Whether to set a reverse record (rev field in Sig).
+    /// When true, rev = original handle name (before flattening).
+    /// When false, rev = empty.
+    pub rev: bool,
 }
 
 pub struct MessageBuilder {
@@ -28,13 +32,14 @@ impl MessageBuilder {
 
     /// Add a .spacecert chain with records.
     /// The handle name is taken from the chain's subject.
-    pub fn add_handle(&mut self, chain: CertificateChain, records: OffchainRecords) {
+    pub fn add_handle(&mut self, chain: CertificateChain, records: sip7::RecordSet, rev: bool) {
         let handle = chain.subject().clone();
         self.certs.extend(chain.into_certs());
         self.updates.push(DataUpdateRequest {
             handle,
             records: Some(records),
             delegate_records: None,
+            rev,
         });
     }
 
@@ -46,11 +51,12 @@ impl MessageBuilder {
         self.certs.push(cert);
     }
 
-    pub fn add_records(&mut self, handle: SName, records: OffchainRecords) {
+    pub fn add_records(&mut self, handle: SName, records: sip7::RecordSet, rev: bool) {
         self.updates.push(DataUpdateRequest {
             handle,
             records: Some(records),
             delegate_records: None,
+            rev,
         });
     }
 
@@ -77,31 +83,59 @@ impl MessageBuilder {
 
     /// Build the message from a chain proof.
     ///
-    /// Deduplicates root certificates by looking up commitment block heights
-    /// from the chain proof, keeping the one with the most recent commitment.
-    /// Then assembles into bundles and applies all record updates.
-    pub fn build(self, chain: ChainProof) -> Result<Message, MessageError> {
+    /// Appends Sig records (with empty signatures) to all record sets.
+    /// Returns the message and a list of unsigned records that need signing.
+    /// Call `msg.set_signature()` for each after signing.
+    pub fn build(self, chain: ChainProof) -> Result<(Message, Vec<UnsignedRecord>), MessageError> {
         let certs = dedup_root_certs(self.certs, &chain);
         let resolver = NameResolver::from_certificates(&certs, &chain.nums);
         let mut msg = Message::try_from_certificates(chain, certs)?;
+        let mut unsigned = Vec::new();
 
         for update in self.updates {
-            let handle = resolver.flatten(&update.handle);
+            let signer = resolver.flatten(&update.handle);
+            let rev = if update.rev {
+                update.handle.clone()
+            } else {
+                SName::empty()
+            };
+
             if let Some(data) = update.records {
-                msg.set_records(&handle, data);
+                let with_sig = msg::pack_sig(&signer, &rev, &data)
+                    .map_err(|e| MessageError::RecordsInvalid {
+                        handle: update.handle.to_string(),
+                        reason: e.to_string(),
+                    })?;
+                unsigned.push(UnsignedRecord {
+                    handle: update.handle.clone(),
+                    signer: signer.clone(),
+                    signing_id: msg::signing_id_for(&with_sig),
+                });
+                msg.set_records(&signer, with_sig);
             }
             if let Some(data) = update.delegate_records {
-                msg.set_delegate_records(&handle, data);
+                let with_sig = msg::pack_sig(&signer, &rev, &data)
+                    .map_err(|e| MessageError::RecordsInvalid {
+                        handle: update.handle.to_string(),
+                        reason: e.to_string(),
+                    })?;
+                unsigned.push(UnsignedRecord {
+                    handle: update.handle.clone(),
+                    signer: signer.clone(),
+                    signing_id: msg::signing_id_for(&with_sig),
+                });
+                msg.set_delegate_records(&signer, with_sig);
             }
         }
 
-        Ok(msg)
+        Ok((msg, unsigned))
     }
 }
 
 impl Message {
     /// Update offchain data on an existing message.
     ///
+    /// Note: records passed here should already have Sig records appended.
     /// Construct a new message to update certificates.
     pub fn update(&mut self, updates: Vec<DataUpdateRequest>) {
         for update in updates {

@@ -13,8 +13,8 @@ use bitcoin::secp256k1::rand::{self, SeedableRng};
 use bitcoin::{BlockHash, OutPoint, ScriptBuf, Txid};
 use borsh::{BorshDeserialize, BorshSerialize};
 use libveritas::cert::{HandleOut, HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree};
-use libveritas::msg::{self, ChainProof, Message, OffchainRecords};
-use libveritas::sname::{Label, SName};
+use libveritas::msg::{self, ChainProof, Message};
+use spaces_protocol::sname::{Subname, SName};
 use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
 use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
 use spacedb::Sha256Hasher;
@@ -47,8 +47,8 @@ pub fn slabel(s: &str) -> SLabel {
     SLabel::from_str(s).unwrap()
 }
 
-pub fn label(s: &str) -> Label {
-    Label::from_str(s).unwrap()
+pub fn label(s: &str) -> Subname {
+    Subname::from_str(s).unwrap()
 }
 
 pub fn sign_zone(zone: &Zone, keypair: &Keypair) -> Signature {
@@ -110,10 +110,10 @@ pub struct TestDelegatedSpace {
 
 #[derive(Clone)]
 pub struct TestHandle {
-    pub name: Label,
+    pub name: Subname,
     pub genesis_spk: ScriptBuf,
     pub keypair: Keypair,
-    pub records: Option<OffchainRecords>,
+    pub records: Option<sip7::RecordSet>,
 }
 
 #[derive(Clone)]
@@ -126,7 +126,7 @@ pub struct StagedHandle {
 pub struct TestCommitmentBundle {
     pub root: [u8; 32],
     pub block_height: u32,
-    pub handles: HashMap<Label, TestHandle>,
+    pub handles: HashMap<Subname, TestHandle>,
     pub handle_tree: SubTree<Sha256Hasher>,
     pub receipt: Option<Receipt>,
 }
@@ -468,17 +468,25 @@ pub struct TestHandleTree {
     pub ds: TestDelegatedSpace,
     pub handle_tree: SubTree<Sha256Hasher>,
     pub commitments: Vec<TestCommitmentBundle>,
-    pub staged: HashMap<Label, StagedHandle>,
+    pub staged: HashMap<Subname, StagedHandle>,
 }
 
 impl TestHandle {
-    pub fn set_records(&mut self, data: sip7::RecordSet) {
-        let mut od = OffchainRecords {
-            records: data,
-            signature: Signature([0u8; 64]),
-        };
-        od.signature = sign_mesage(od.signing_bytes(), &self.keypair);
-        self.records = Some(od);
+    pub fn set_records(&mut self, data: sip7::RecordSet, signer: &SName) {
+        // Pack with empty sig for signing
+        let with_sig = msg::pack_sig(signer, signer, &data)
+            .expect("pack_sig");
+        let sig = sign_mesage(with_sig.as_slice(), &self.keypair);
+        // Re-pack with actual signature
+        let mut records = with_sig.unpack().expect("unpack");
+        for r in &mut records {
+            if let sip7::Record::Sig { sig: s, .. } = r {
+                if s.is_empty() {
+                    *s = sig.0.to_vec();
+                }
+            }
+        }
+        self.records = Some(sip7::RecordSet::pack(records).expect("repack"));
     }
 }
 
@@ -514,6 +522,7 @@ impl TestHandleTree {
         };
 
         let h = sname(&format!("{}{}", name, self.space));
+        let num_id = Some(NumId::from_spk::<KeyHash>(genesis_spk.clone()));
         let zone = Zone {
             anchor: 0,
             sovereignty: SovereigntyState::Dependent,
@@ -525,6 +534,7 @@ impl TestHandleTree {
             records: None,
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
+            num_id,
         };
 
         let signature = sign_zone(&zone, &self.ds.ptr.keypair);
@@ -537,7 +547,7 @@ impl TestHandleTree {
         assert!(!self.staged.is_empty(), "no handles to commit");
 
         let initial_root = self.handle_tree.compute_root().expect("compute root");
-        let handles: HashMap<Label, TestHandle> = std::mem::take(&mut self.staged)
+        let handles: HashMap<Subname, TestHandle> = std::mem::take(&mut self.staged)
             .into_iter()
             .map(|(k, v)| (k, v.handle))
             .collect();

@@ -2,6 +2,7 @@ use spacedb::subtree::SubTree;
 use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
 use spaces_nums::RootAnchor;
 use libveritas::{msg, SovereigntyState, Veritas};
+use spaces_protocol::sname::SName;
 use libveritas::cert::{HandleSubtree, NumsSubtree, SpacesSubtree};
 use libveritas::msg::{Bundle, ChainProof};
 use crate::{TestChain, TestDelegatedSpace, TestHandleTree};
@@ -214,6 +215,7 @@ impl FixtureRunner {
             delegate_records: None,
         };
 
+        let space_label = self.space.space.label();
         for c in &mut self.handles.commitments {
             bundle.receipt = c.receipt.clone();
             let mut epoch = msg::Epoch {
@@ -221,11 +223,14 @@ impl FixtureRunner {
                 handles: vec![],
             };
             for (_, handle) in &mut c.handles {
+                let signer = SName::join(&handle.name, &space_label)
+                    .expect("join handle name");
                 // Add some off-chain data
                 handle.set_records(
                     sip7::RecordSet::pack(vec![
-                        sip7::Record::txt("name", &handle.name.to_string()),
+                        sip7::Record::txt("name", &[&handle.name.to_string()]),
                     ]).expect("pack records"),
+                    &signer,
                 );
 
                 epoch.handles.push(msg::Handle {
@@ -245,11 +250,14 @@ impl FixtureRunner {
         let staging = bundle.epochs.last_mut().unwrap_or(&mut empty_epoch);
 
         for (_, staged) in &mut self.handles.staged {
+            let signer = SName::join(&staged.handle.name, &space_label)
+                .expect("join handle name");
             // add some off-chain data
             staged.handle.set_records(
                 sip7::RecordSet::pack(vec![
-                    sip7::Record::txt("name", &staged.handle.name.to_string()),
+                    sip7::Record::txt("name", &[&staged.handle.name.to_string()]),
                 ]).expect("pack records"),
+                &signer,
             );
             staging.handles.push(msg::Handle {
                 name: staged.handle.name.clone(),

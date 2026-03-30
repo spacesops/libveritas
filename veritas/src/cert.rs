@@ -12,7 +12,7 @@ use spaces_protocol::slabel::SLabel;
 use spaces_protocol::SpaceOut;
 use spaces_nums::{snumeric::SNumeric, ChainProofRequest, Commitment, CommitmentKey, NumericKey, NumKeyKind, NumOut, CommitmentTipKey};
 use spaces_nums::num_id::NumId;
-use crate::sname::{Label, NameLike, SName};
+use spaces_protocol::sname::{Subname, NameLike, SName};
 
 /// Current certificate version.
 pub const CERTIFICATE_VERSION: u8 = 0;
@@ -459,7 +459,7 @@ impl HandleSubtree {
         &mut self.0
     }
 
-    pub fn contains_subspace(&self, label: &Label, genesis_spk: &ScriptBuf) -> Result<bool, SubtreeError> {
+    pub fn contains_subspace(&self, label: &Subname, genesis_spk: &ScriptBuf) -> Result<bool, SubtreeError> {
         let key = Sha256Hasher::hash(label.as_slabel().as_ref());
 
         if !self.0.contains(&key)? {

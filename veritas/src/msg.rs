@@ -1,7 +1,6 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use risc0_zkvm::Receipt;
 use serde::{Deserialize, Serialize};
-use spacedb::{NodeHasher, Sha256Hasher};
 use spaces_protocol::bitcoin::{ScriptBuf, secp256k1};
 use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::slabel::SLabel;
@@ -10,7 +9,7 @@ use std::io::{Read, Write};
 
 use crate::{MessageError, Zone};
 use crate::cert::{Certificate, HandleSubtree, NumsSubtree, Signature, SpacesSubtree, Witness};
-use crate::sname::{Label, NameLike, SName};
+use spaces_protocol::sname::{Subname, NameLike, SName};
 
 /// Context for a verification query.
 ///
@@ -97,15 +96,15 @@ impl Message {
         borsh::to_vec(self).expect("message serialization should not fail")
     }
 
-    pub fn set_delegate_records(&mut self, handle: &SName, data: OffchainRecords) {
+    pub fn set_delegate_records(&mut self, handle: &SName, data: sip7::RecordSet) {
         self.set_records_inner(handle, data, true)
     }
 
-    pub fn set_records(&mut self, handle: &SName, data: OffchainRecords) {
+    pub fn set_records(&mut self, handle: &SName, data: sip7::RecordSet) {
         self.set_records_inner(handle, data, false)
     }
 
-    fn set_records_inner(&mut self, handle: &SName, data: OffchainRecords, delegate: bool) {
+    fn set_records_inner(&mut self, handle: &SName, data: sip7::RecordSet, delegate: bool) {
         let (space, subspace) = match handle.label_count() {
             1 => (handle.space().unwrap(), None),
             2 => (handle.space().unwrap(), Some(handle.subspace().unwrap())),
@@ -234,9 +233,9 @@ pub struct Bundle {
     /// When present, the journal decodes to the tip's final_root.
     pub receipt: Option<Receipt>,
     /// Signed records from the space owner.
-    pub records: Option<OffchainRecords>,
+    pub records: Option<sip7::RecordSet>,
     /// Signed records from the delegate.
-    pub delegate_records: Option<OffchainRecords>,
+    pub delegate_records: Option<sip7::RecordSet>,
     /// Handle epochs for this space. Each epoch corresponds to a committed
     /// state root. The tip epoch (if handles are being proven against it)
     /// should have `tree.compute_root()` matching the receipt's final_root
@@ -271,11 +270,11 @@ pub struct Epoch {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Handle {
     /// The handle name (e.g., "alice" for "alice@bitcoin").
-    pub name: Label,
+    pub name: Subname,
     /// The genesis script pubkey the handle was initialized with.
     pub genesis_spk: ScriptBuf,
-    /// Signed records from the handle owner.
-    pub records: Option<OffchainRecords>,
+    /// Signed records from the handle owner (RecordSet with embedded Sig record).
+    pub records: Option<sip7::RecordSet>,
     /// Signature from the delegate for temporary certificates.
     /// `None` for final certificates (handle committed to tree).
     pub signature: Option<Signature>,
@@ -291,67 +290,136 @@ impl Handle {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct OffchainRecords {
-    pub records: sip7::RecordSet,
-    pub signature: Signature,
+/// Verify the Sig record in a RecordSet against a script pubkey.
+///
+/// 1. Finds the Sig record
+/// 2. Checks signer matches expected_signer
+/// 3. Re-packs with empty sig to get signing bytes
+/// 4. Verifies schnorr signature against script_pubkey
+pub fn verify_records(
+    records: &sip7::RecordSet,
+    script_pubkey: &ScriptBuf,
+    expected_signer: &SName,
+) -> Result<(), crate::SignatureError> {
+    use secp256k1::XOnlyPublicKey;
+
+    let all_records = records.unpack()
+        .map_err(|_| crate::SignatureError::InvalidSignature)?;
+
+    let sig_record = all_records.iter()
+        .find_map(|r| match r {
+            sip7::Record::Sig { signer, rev, sig } => Some((signer, rev, sig)),
+            _ => None,
+        })
+        .ok_or(crate::SignatureError::InvalidSignature)?;
+
+    let (signer, _rev, sig_bytes) = sig_record;
+
+    if signer != expected_signer {
+        return Err(crate::SignatureError::VerificationFailed);
+    }
+
+    // Re-pack with empty sig to get signing bytes
+    let signing_records: Vec<sip7::Record> = all_records.iter().map(|r| match r {
+        sip7::Record::Sig { signer, rev, .. } => {
+            sip7::Record::sig(signer.clone(), rev.clone(), vec![])
+        }
+        other => other.clone(),
+    }).collect();
+
+    let signing_set = sip7::RecordSet::pack(signing_records)
+        .map_err(|_| crate::SignatureError::InvalidSignature)?;
+
+    let script_bytes = script_pubkey.as_bytes();
+    if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
+        return Err(crate::SignatureError::InvalidPublicKey);
+    }
+    let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
+        .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
+    let msg = crate::hash_signable_message(signing_set.as_slice());
+    let sig = secp256k1::schnorr::Signature::from_slice(sig_bytes)
+        .map_err(|_| crate::SignatureError::InvalidSignature)?;
+    secp256k1::Secp256k1::verification_only()
+        .verify_schnorr(&sig, &msg, &pubkey)
+        .map_err(|_| crate::SignatureError::VerificationFailed)
 }
 
-impl OffchainRecords {
-    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
-        borsh::from_slice(bytes)
-    }
+/// Append a Sig record with empty signature to a RecordSet.
+///
+/// `signer` is the canonical/flattened name (e.g. `alice#800-12-12`).
+/// `rev` is the original human-readable name (e.g. `alice@bitcoin`).
+/// Returns a new RecordSet whose wire bytes are the signing payload.
+pub fn pack_sig(signer: &SName, rev: &SName, records: &sip7::RecordSet) -> Result<sip7::RecordSet, sip7::Error> {
+    let mut unpacked = records.unpack()?;
+    unpacked.retain(|r| !matches!(r, sip7::Record::Sig { .. }));
+    unpacked.push(sip7::Record::sig(signer.clone(), rev.clone(), vec![]));
+    sip7::RecordSet::pack(unpacked)
+}
 
-    pub fn to_bytes(&self) -> Vec<u8> {
-        borsh::to_vec(self).expect("offchain data serialization should not fail")
-    }
-
-    /// The signing bytes are the raw sip7 wire bytes (seq is embedded as a record).
-    pub fn signing_bytes(&self) -> &[u8] {
-        self.records.as_slice()
-    }
-
+/// An unsigned record set pending signature.
+pub struct UnsignedRecord {
+    /// The original handle name (before flattening, e.g. `alice@bitcoin`).
+    pub handle: SName,
+    /// The canonical/flattened signer name (e.g. `alice#800-12-12`).
+    /// Pass this to `Message::set_signature()`.
+    pub signer: SName,
     /// The 32-byte signing hash (Spaces signed-message prefix + SHA256).
-    pub fn signing_id(&self) -> [u8; 32] {
-        let msg = crate::hash_signable_message(self.signing_bytes());
-        *msg.as_ref()
-    }
+    pub signing_id: [u8; 32],
+}
 
-    /// Verify the signature against the given script pubkey.
-    pub fn verify(&self, script_pubkey: &ScriptBuf) -> Result<(), crate::SignatureError> {
-        use secp256k1::XOnlyPublicKey;
-        let script_bytes = script_pubkey.as_bytes();
-        if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
-            return Err(crate::SignatureError::InvalidPublicKey);
-        }
-        let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
-            .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
-        let msg = crate::hash_signable_message(self.signing_bytes());
-        let sig = secp256k1::schnorr::Signature::from_slice(&self.signature.0)
-            .map_err(|_| crate::SignatureError::InvalidSignature)?;
-        secp256k1::Secp256k1::verification_only()
-            .verify_schnorr(&sig, &msg, &pubkey)
-            .map_err(|_| crate::SignatureError::VerificationFailed)
-    }
+impl Message {
+    /// Set the signature on a record set identified by its signer name.
+    ///
+    /// Finds the RecordSet with a Sig record whose signer matches the handle,
+    /// then re-packs with the provided signature bytes.
+    pub fn set_signature(&mut self, handle: &SName, signature: Vec<u8>) {
+        for bundle in &mut self.spaces {
+            if try_inject_sig(&mut bundle.records, handle, &signature) { return; }
+            if try_inject_sig(&mut bundle.delegate_records, handle, &signature) { return; }
 
-    pub fn is_better_than(&self, other: &Self) -> bool {
-        let self_seq = self.records.seq().unwrap_or(0);
-        let other_seq = other.records.seq().unwrap_or(0);
-        if self_seq != other_seq {
-            return self_seq > other_seq;
+            for epoch in &mut bundle.epochs {
+                for h in &mut epoch.handles {
+                    if try_inject_sig(&mut h.records, handle, &signature) { return; }
+                }
+            }
         }
-        // Same seq, compare data hash for deterministic tiebreaker
-        let hash_a = Sha256Hasher::hash(self.records.as_slice());
-        let hash_b = Sha256Hasher::hash(other.records.as_slice());
-        if hash_a != hash_b {
-            return hash_a > hash_b;
+    }
+}
+
+/// Extract the signer from an empty Sig record, if present.
+fn extract_empty_sig_signer(records: &sip7::RecordSet) -> Option<SName> {
+    let unpacked = records.unpack().ok()?;
+    unpacked.iter().find_map(|r| match r {
+        sip7::Record::Sig { signer, sig, .. } if sig.is_empty() => Some(signer.clone()),
+        _ => None,
+    })
+}
+
+pub fn signing_id_for(records: &sip7::RecordSet) -> [u8; 32] {
+    let msg = crate::hash_signable_message(records.as_slice());
+    *msg.as_ref()
+}
+
+/// Try to inject a signature into a record set if its Sig signer matches the handle.
+/// Returns true if the signature was injected.
+fn try_inject_sig(records: &mut Option<sip7::RecordSet>, handle: &SName, signature: &[u8]) -> bool {
+    let Some(rs) = records.as_ref() else { return false };
+    let Some(signer) = extract_empty_sig_signer(rs) else { return false };
+    if &signer != handle { return false; }
+
+    let Ok(unpacked) = rs.unpack() else { return false };
+    let updated: Vec<sip7::Record> = unpacked.into_iter().map(|r| match r {
+        sip7::Record::Sig { signer, rev, sig } if sig.is_empty() => {
+            sip7::Record::sig(signer, rev, signature.to_vec())
         }
+        other => other,
+    }).collect();
+
+    if let Ok(new_rs) = sip7::RecordSet::pack(updated) {
+        *records = Some(new_rs);
+        true
+    } else {
         false
-    }
-
-    /// Create OffchainRecords from a sip7 RecordSet and signature.
-    pub fn new(records: sip7::RecordSet, signature: Signature) -> Self {
-        Self { records, signature }
     }
 }
 
@@ -404,8 +472,10 @@ impl BorshSerialize for Bundle {
         BorshSerialize::serialize(&self.subject, writer)?;
         BorshSerialize::serialize(&self.receipt, writer)?;
         BorshSerialize::serialize(&self.epochs, writer)?;
-        BorshSerialize::serialize(&self.records, writer)?;
-        BorshSerialize::serialize(&self.delegate_records, writer)
+        let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&records_bytes, writer)?;
+        let delegate_bytes: Option<Vec<u8>> = self.delegate_records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&delegate_bytes, writer)
     }
 }
 
@@ -414,14 +484,14 @@ impl BorshDeserialize for Bundle {
         let space = SLabel::deserialize_reader(reader)?;
         let receipt = Option::<Receipt>::deserialize_reader(reader)?;
         let epochs = Vec::<Epoch>::deserialize_reader(reader)?;
-        let records = Option::<OffchainRecords>::deserialize_reader(reader)?;
-        let delegate_records = Option::<OffchainRecords>::deserialize_reader(reader)?;
+        let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
+        let delegate_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
         Ok(Bundle {
             subject: space,
             receipt,
             epochs,
-            records,
-            delegate_records,
+            records: records_bytes.map(sip7::RecordSet::new),
+            delegate_records: delegate_bytes.map(sip7::RecordSet::new),
         })
     }
 }
@@ -445,40 +515,23 @@ impl BorshSerialize for Handle {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.name, writer)?;
         BorshSerialize::serialize(&self.genesis_spk.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.records, writer)?;
+        let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
+        BorshSerialize::serialize(&records_bytes, writer)?;
         BorshSerialize::serialize(&self.signature, writer)
     }
 }
 
 impl BorshDeserialize for Handle {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let name = Label::deserialize_reader(reader)?;
+        let name = Subname::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         let genesis_spk = ScriptBuf::from_bytes(spk_bytes);
-        let records = Option::<OffchainRecords>::deserialize_reader(reader)?;
+        let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
         let signature = Option::<Signature>::deserialize_reader(reader)?;
         Ok(Handle {
             name,
             genesis_spk,
-            records,
-            signature,
-        })
-    }
-}
-
-impl BorshSerialize for OffchainRecords {
-    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        BorshSerialize::serialize(&self.records.as_slice().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.signature, writer)
-    }
-}
-
-impl BorshDeserialize for OffchainRecords {
-    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let data_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let signature = Signature::deserialize_reader(reader)?;
-        Ok(OffchainRecords {
-            records: sip7::RecordSet::new(data_bytes),
+            records: records_bytes.map(sip7::RecordSet::new),
             signature,
         })
     }

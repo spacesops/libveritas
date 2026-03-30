@@ -1,5 +1,4 @@
-use crate::cert::{Certificate, Witness, Signature};
-use crate::sname::{SName};
+use crate::cert::{Certificate, KeyHash, Witness, Signature};
 use borsh::{BorshDeserialize, BorshSerialize};
 use libveritas_zk::guest::CommitmentKind;
 use risc0_zkvm::{Receipt, VerifierContext};
@@ -8,6 +7,7 @@ use spacedb::{Hash, NodeHasher, Sha256Hasher};
 use spaces_protocol::bitcoin::hashes::{Hash as HashUtil, sha256, HashEngine};
 use spaces_protocol::bitcoin::secp256k1::{self, XOnlyPublicKey};
 use spaces_protocol::bitcoin::{ScriptBuf};
+use spaces_protocol::sname::{SName};
 use spaces_protocol::constants::SPACES_SIGNED_MSG_PREFIX;
 use spaces_protocol::slabel::SLabel;
 use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
@@ -19,12 +19,13 @@ use spaces_nums::RootAnchor;
 
 pub mod cert;
 pub mod msg;
-pub mod sname;
 pub mod constants;
 pub mod builder;
 pub mod names;
 
 pub use sip7;
+use spaces_nums::num_id::NumId;
+pub use spaces_protocol;
 
 /// Verification option flags (combine with bitwise OR).
 pub const VERIFY_DEFAULT: u32 = 0;
@@ -178,6 +179,11 @@ pub struct Zone {
     pub delegate: ProvableOption<Delegate>,
     /// Commitment information including state root and finality status.
     pub commitment: ProvableOption<CommitmentInfo>,
+    /// The numeric id for this zone:
+    /// For spaces, its None.
+    /// For handles, derived from their genesis spk
+    /// For numerics, it's their num id
+    pub num_id: Option<NumId>,
 }
 
 
@@ -334,7 +340,8 @@ impl BorshSerialize for Zone {
         let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
         BorshSerialize::serialize(&records_bytes, writer)?;
         BorshSerialize::serialize(&self.delegate, writer)?;
-        BorshSerialize::serialize(&self.commitment, writer)
+        BorshSerialize::serialize(&self.commitment, writer)?;
+        BorshSerialize::serialize(&self.num_id, writer)
     }
 }
 
@@ -351,17 +358,20 @@ impl BorshDeserialize for Zone {
         let delegate: ProvableOption<Delegate> = ProvableOption::deserialize_reader(reader)?;
         let commitment: ProvableOption<CommitmentInfo> = ProvableOption::deserialize_reader(reader)?;
 
+        let script_pubkey = ScriptBuf::from_bytes(spk_bytes);
+        let num_id = Option::<NumId>::deserialize_reader(reader)?;
         Ok(Zone {
             anchor,
             sovereignty,
             handle,
             canonical,
             alias,
-            script_pubkey: ScriptBuf::from_bytes(spk_bytes),
+            script_pubkey,
             fallback_records: fallback_bytes.map(sip7::RecordSet::new),
             records: records_bytes.map(sip7::RecordSet::new),
             delegate,
             commitment,
+            num_id,
         })
     }
 }
@@ -1020,6 +1030,7 @@ impl Veritas {
 
     /// Extract parent zone from chain proofs and set sovereignty based on commitment finality.
     fn extract_parent_zone(&self, chain: &msg::ChainProof, bundle: &msg::Bundle) -> Result<Option<Zone>, MessageError> {
+        let mut num_id = None;
         let (spk, records) = if !bundle.subject.is_numeric() {
             let Some(spaceout) = chain.spaces.find_space(&bundle.subject) else {
                 return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() })
@@ -1037,6 +1048,7 @@ impl Veritas {
                 .ok().flatten() else {
                 return Err(MessageError::NumericNotFound { numeric: bundle.subject.to_string() })
             };
+            num_id = Some(numout.num.id);
             (numout.script_pubkey, numout.num.data
                 .filter(|d| !d.is_empty())
                 .map(|d| sip7::RecordSet::new(d.to_vec())))
@@ -1055,16 +1067,18 @@ impl Veritas {
             records: None,
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
+            num_id,
         };
 
 
-        // Verify records signature if present, store just the RecordSet
-        if let Some(offchain) = &bundle.records {
-            offchain.verify(&z.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
-                handle: z.handle.to_string(),
-                reason: e.to_string(),
-            })?;
-            z.records = Some(offchain.records.clone());
+        // Verify records signature if present
+        if let Some(records) = &bundle.records {
+            msg::verify_records(records, &z.script_pubkey, &z.canonical)
+                .map_err(|e| MessageError::RecordsInvalid {
+                    handle: z.handle.to_string(),
+                    reason: e.to_string(),
+                })?;
+            z.records = Some(records.clone());
         }
 
         // Extract delegate info
@@ -1073,13 +1087,13 @@ impl Veritas {
                 None => z.delegate = ProvableOption::Empty,
                 Some(delegate) => {
                     let mut delegate_records = None;
-                    if let Some(offchain) = &bundle.delegate_records {
-                        offchain.verify(&delegate.script_pubkey)
+                    if let Some(records) = &bundle.delegate_records {
+                        msg::verify_records(records, &delegate.script_pubkey, &z.canonical)
                             .map_err(|e| MessageError::RecordsInvalid {
                                 handle: z.handle.to_string(),
                                 reason: e.to_string(),
                             })?;
-                        delegate_records = Some(offchain.records.clone());
+                        delegate_records = Some(records.clone());
                     }
                     z.delegate = ProvableOption::Exists {
                         value: Delegate {
@@ -1145,14 +1159,16 @@ fn verify_temporary_handle(
     };
 
     let mut verified_records = None;
-    if let Some(offchain) = &handle.records {
-        offchain.verify(&handle.genesis_spk).map_err(|e| MessageError::RecordsInvalid {
-            handle: subject.to_string(),
-            reason: e.to_string(),
-        })?;
-        verified_records = Some(offchain.records.clone());
+    if let Some(records) = &handle.records {
+        msg::verify_records(records, &handle.genesis_spk, &subject)
+            .map_err(|e| MessageError::RecordsInvalid {
+                handle: subject.to_string(),
+                reason: e.to_string(),
+            })?;
+        verified_records = Some(records.clone());
     }
 
+    let num_id = Some(NumId::from_spk::<KeyHash>(handle.genesis_spk.clone()));
     let zone = Zone {
         anchor: anchor_height,
         sovereignty: SovereigntyState::Dependent,
@@ -1164,6 +1180,7 @@ fn verify_temporary_handle(
         records: verified_records,
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
+        num_id,
     };
 
     zone.verify_signature(
@@ -1206,24 +1223,26 @@ fn verify_final_handle(
         .find_num(&handle.genesis_spk)
         .map_err(|e| MessageError::NumsProofMalformed { reason: e.to_string() })?;
 
-    let (spk, onchain_data, alias) = match numout {
+    let (num_id, spk, onchain_data, alias) = match numout {
         Some(numout) => (
+            numout.num.id,
             numout.script_pubkey,
             numout.num.data
                 .filter(|d| !d.is_empty())
                 .map(|d| sip7::RecordSet::new(d.to_vec())),
             Some(numout.num.name.to_slabel())
         ),
-        None => (handle.genesis_spk.clone(), None, None),
+        None => (NumId::from_spk::<KeyHash>(handle.genesis_spk.clone()), handle.genesis_spk.clone(), None, None),
     };
 
     let mut verified_records = None;
-    if let Some(offchain) = &handle.records {
-        offchain.verify(&spk).map_err(|e| MessageError::RecordsInvalid {
-            handle: subject.to_string(),
-            reason: e.to_string(),
-        })?;
-        verified_records = Some(offchain.records.clone());
+    if let Some(records) = &handle.records {
+        msg::verify_records(records, &spk, &subject)
+            .map_err(|e| MessageError::RecordsInvalid {
+                handle: subject.to_string(),
+                reason: e.to_string(),
+            })?;
+        verified_records = Some(records.clone());
     }
 
     let zone = Zone {
@@ -1237,6 +1256,7 @@ fn verify_final_handle(
         records: verified_records,
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
+        num_id: Some(num_id),
     };
 
     Ok(zone)

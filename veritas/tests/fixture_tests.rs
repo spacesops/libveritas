@@ -2,7 +2,7 @@ use spacedb::subtree::{ProofType};
 use libveritas::cert::{NumsSubtree, SpacesSubtree};
 use libveritas::{ProvableOption, SovereigntyState};
 use libveritas::msg::{QueryContext};
-use libveritas::sname::NameLike;
+use spaces_protocol::sname::NameLike;
 use libveritas_testutil::fixture::{kitchen_sink, ChainState, FixtureRunner};
 
 #[test]

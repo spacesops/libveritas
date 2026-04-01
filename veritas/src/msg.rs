@@ -6,7 +6,7 @@ use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::slabel::SLabel;
 use std::collections::HashMap;
 use std::io::{Read, Write};
-
+use sip7::{Record, RecordSet};
 use crate::{MessageError, Zone};
 use crate::cert::{Certificate, HandleSubtree, NumsSubtree, Signature, SpacesSubtree, Witness};
 use spaces_protocol::sname::{Subname, NameLike, SName};
@@ -292,43 +292,22 @@ impl Handle {
 
 /// Verify the Sig record in a RecordSet against a script pubkey.
 ///
-/// 1. Finds the Sig record
-/// 2. Checks signer matches expected_signer
-/// 3. Re-packs with empty sig to get signing bytes
-/// 4. Verifies schnorr signature against script_pubkey
+/// 1. Extracts signable payload and sig data via `RecordSet::signable()`
+/// 2. Checks canonical name matches expected
+/// 3. Verifies schnorr signature against script_pubkey
 pub fn verify_records(
     records: &sip7::RecordSet,
     script_pubkey: &ScriptBuf,
-    expected_signer: &SName,
+    expected_canonical: &SName,
 ) -> Result<(), crate::SignatureError> {
+    let signable = records.signable();
+    let sig_data = signable.sig.ok_or_else(|| crate::SignatureError::InvalidSignature)?;
+
     use secp256k1::XOnlyPublicKey;
 
-    let all_records = records.unpack()
-        .map_err(|_| crate::SignatureError::InvalidSignature)?;
-
-    let sig_record = all_records.iter()
-        .find_map(|r| match r {
-            sip7::Record::Sig { signer, rev, sig } => Some((signer, rev, sig)),
-            _ => None,
-        })
-        .ok_or(crate::SignatureError::InvalidSignature)?;
-
-    let (signer, _rev, sig_bytes) = sig_record;
-
-    if signer != expected_signer {
-        return Err(crate::SignatureError::VerificationFailed);
+    if &sig_data.canonical != expected_canonical {
+        return Err(crate::SignatureError::SignerMismatch);
     }
-
-    // Re-pack with empty sig to get signing bytes
-    let signing_records: Vec<sip7::Record> = all_records.iter().map(|r| match r {
-        sip7::Record::Sig { signer, rev, .. } => {
-            sip7::Record::sig(signer.clone(), rev.clone(), vec![])
-        }
-        other => other.clone(),
-    }).collect();
-
-    let signing_set = sip7::RecordSet::pack(signing_records)
-        .map_err(|_| crate::SignatureError::InvalidSignature)?;
 
     let script_bytes = script_pubkey.as_bytes();
     if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
@@ -336,110 +315,70 @@ pub fn verify_records(
     }
     let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
         .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
-    let msg = crate::hash_signable_message(signing_set.as_slice());
-    let sig = secp256k1::schnorr::Signature::from_slice(sig_bytes)
+    let msg = crate::hash_signable_message(signable.bytes);
+    let sig = secp256k1::schnorr::Signature::from_slice(&sig_data.sig)
         .map_err(|_| crate::SignatureError::InvalidSignature)?;
     secp256k1::Secp256k1::verification_only()
         .verify_schnorr(&sig, &msg, &pubkey)
         .map_err(|_| crate::SignatureError::VerificationFailed)
 }
 
-/// Extract the Sig record from a RecordSet, if present.
-///
-/// Returns `(signer, rev, sig_bytes)`.
-pub fn find_sig(records: &sip7::RecordSet) -> Option<(SName, SName, Vec<u8>)> {
-    let unpacked = records.unpack().ok()?;
-    unpacked.into_iter().find_map(|r| match r {
-        sip7::Record::Sig { signer, rev, sig } => Some((signer, rev, sig)),
-        _ => None,
-    })
-}
 
-/// Append a Sig record with empty signature to a RecordSet.
-///
-/// If a Sig record already exists, the RecordSet is returned unchanged.
-///
-/// `signer` is the canonical/flattened name (e.g. `alice#800-12-12`).
-/// `rev` is the original human-readable name (e.g. `alice@bitcoin`).
-/// Returns a new RecordSet whose wire bytes are the signing payload.
-pub fn pack_sig(signer: &SName, rev: &SName, records: &sip7::RecordSet) -> Result<sip7::RecordSet, sip7::Error> {
-    if find_sig(records).is_some() {
-        return Ok(records.clone());
-    }
-    let mut unpacked = records.unpack()?;
-    unpacked.push(sip7::Record::sig(signer.clone(), rev.clone(), vec![]));
-    sip7::RecordSet::pack(unpacked)
-}
+
 
 /// An unsigned record set pending signature.
-pub struct UnsignedRecord {
-    /// The original handle name (before flattening, e.g. `alice@bitcoin`).
+pub struct UnsignedRecordSet {
     pub handle: SName,
-    /// The canonical/flattened signer name (e.g. `alice#800-12-12`).
-    /// Pass this to `Message::set_signature()`.
-    pub signer: SName,
-    /// The 32-byte signing hash (Spaces signed-message prefix + SHA256).
-    pub signing_id: [u8; 32],
+
+    pub canonical: SName,
+
+    pub flags: u8,
+
+    pub records: RecordSet,
+
+    /// whether these are delegate records
+    pub delegate: bool,
 }
 
-impl Message {
-    /// Set the signature on a record set identified by its signer name.
-    ///
-    /// Finds the RecordSet with a Sig record whose signer matches the handle,
-    /// then re-packs with the provided signature bytes.
-    pub fn set_signature(&mut self, handle: &SName, signature: Vec<u8>) {
-        for bundle in &mut self.spaces {
-            if try_inject_sig(&mut bundle.records, handle, &signature) { return; }
-            if try_inject_sig(&mut bundle.delegate_records, handle, &signature) { return; }
-
-            for epoch in &mut bundle.epochs {
-                for h in &mut epoch.handles {
-                    if try_inject_sig(&mut h.records, handle, &signature) { return; }
-                }
-            }
-        }
+impl UnsignedRecordSet {
+    /// The signable bytes — records + Sig header (without sig data).
+    pub fn signable_bytes(&self) -> Vec<u8> {
+        let mut buf = self.records.signable().bytes.to_vec();
+        // Append a Sig record with a dummy 64-byte sig so the compact_size
+        // matches what a real signature would produce, then take signable()
+        // to strip the sig bytes, leaving only the header.
+        let dummy = Record::sig(
+            self.canonical.clone(),
+            self.handle.clone(),
+            vec![0u8; 64],
+            self.flags,
+        ).pack().expect("valid sig");
+        buf.extend(&dummy);
+        let full = RecordSet::new(buf);
+        full.signable().bytes.to_vec()
     }
-}
 
-/// Extract the signer from an empty Sig record, if present.
-fn extract_empty_sig_signer(records: &sip7::RecordSet) -> Option<SName> {
-    let unpacked = records.unpack().ok()?;
-    unpacked.iter().find_map(|r| match r {
-        sip7::Record::Sig { signer, sig, .. } if sig.is_empty() => Some(signer.clone()),
-        _ => None,
-    })
-}
+    /// The 32-byte signing hash.
+    pub fn signing_id(&self) -> [u8; 32] {
+        let msg = crate::hash_signable_message(&self.signable_bytes());
+        *msg.as_ref()
+    }
 
-pub fn signing_id_for(records: &sip7::RecordSet) -> [u8; 32] {
-    let msg = crate::hash_signable_message(records.as_slice());
-    *msg.as_ref()
-}
-
-/// Try to inject a signature into a record set if its Sig signer matches the handle.
-/// Returns true if the signature was injected.
-fn try_inject_sig(records: &mut Option<sip7::RecordSet>, handle: &SName, signature: &[u8]) -> bool {
-    let Some(rs) = records.as_ref() else { return false };
-    let Some(signer) = extract_empty_sig_signer(rs) else { return false };
-    if &signer != handle { return false; }
-
-    let Ok(unpacked) = rs.unpack() else { return false };
-    let updated: Vec<sip7::Record> = unpacked.into_iter().map(|r| match r {
-        sip7::Record::Sig { signer, rev, sig } if sig.is_empty() => {
-            sip7::Record::sig(signer, rev, signature.to_vec())
-        }
-        other => other,
-    }).collect();
-
-    if let Ok(new_rs) = sip7::RecordSet::pack(updated) {
-        *records = Some(new_rs);
-        true
-    } else {
-        false
+    /// Pack the Sig record with the given signature. Returns signed RecordSet.
+    pub fn pack_sig(&self, signature: Vec<u8>) -> RecordSet {
+        let mut buf = self.records.signable().bytes.to_vec();
+        let r = Record::sig(
+            self.canonical.clone(),
+            self.handle.clone(),
+            signature,
+            self.flags,
+        ).pack().expect("valid sig");
+        buf.extend(r);
+        RecordSet::new(buf)
     }
 }
 
 // Borsh implementations
-
 impl BorshSerialize for Message {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.chain, writer)?;

@@ -212,7 +212,6 @@ pub struct StagedHandle {
 
 pub struct TestCommitmentBundle {
     root: [u8;32],
-    block_height: u32,
     handles: HashMap<Subname, TestHandle>,
     handle_tree: SubTree<Sha256Hasher>,
     receipt: Option<Receipt>,
@@ -508,7 +507,6 @@ impl TestHandleTree {
 
         self.commitments.push(TestCommitmentBundle {
             root: final_root,
-            block_height: onchain_commitment.block_height,
             handles,
             handle_tree: self.handle_tree.clone(),
             receipt,

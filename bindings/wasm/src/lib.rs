@@ -680,19 +680,32 @@ fn addr_to_js(key: &str, value: &[String]) -> JsValue {
     Record::addr(key, arr.into())
 }
 
-fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
+fn parsed_record_to_js(record: &sip7::ParsedRecord<'_>) -> JsValue {
     match record {
-        sip7::Record::Seq(version) => Record::seq(*version),
-        sip7::Record::Txt { key, value } => txt_to_js(key, value),
-        sip7::Record::Addr { key, value } => addr_to_js(key, value),
-        sip7::Record::Blob { key, value } => Record::blob(key, value),
-        sip7::Record::Sig { flags, canonical, handle, sig } => Record::sig(
-            &canonical.to_string(),
-            &handle.to_string(),
-            *flags,
-            sig,
+        sip7::ParsedRecord::Seq(version) => Record::seq(*version),
+        sip7::ParsedRecord::Txt { key, value } => {
+            let owned: Vec<String> = value.to_vec().into_iter().map(String::from).collect();
+            txt_to_js(key, &owned)
+        }
+        sip7::ParsedRecord::Addr { key, value } => {
+            let owned: Vec<String> = value.to_vec().into_iter().map(String::from).collect();
+            addr_to_js(key, &owned)
+        }
+        sip7::ParsedRecord::Blob { key, value } => Record::blob(key, value),
+        sip7::ParsedRecord::Sig(sig) => Record::sig(
+            &sig.canonical.to_owned().to_string(),
+            &sig.handle.to_owned().to_string(),
+            sig.flags,
+            sig.sig,
         ),
-        sip7::Record::Unknown { rtype, rdata } => Record::unknown(*rtype, rdata),
+        sip7::ParsedRecord::Malformed { rtype, rdata } => {
+            let obj = js_sys::Object::new();
+            js_sys::Reflect::set(&obj, &"type".into(), &"malformed".into()).unwrap();
+            js_sys::Reflect::set(&obj, &"rtype".into(), &(*rtype).into()).unwrap();
+            js_sys::Reflect::set(&obj, &"rdata".into(), &js_sys::Uint8Array::from(*rdata)).unwrap();
+            obj.into()
+        }
+        sip7::ParsedRecord::Unknown { rtype, rdata } => Record::unknown(*rtype, rdata),
     }
 }
 
@@ -807,8 +820,8 @@ impl RecordSet {
         let records = self.inner.unpack()
             .map_err(|e| JsError::new(&format!("unpack failed: {e}")))?;
         let array = js_sys::Array::new();
-        for record in records {
-            array.push(&sip7_record_to_js(&record));
+        for record in &records {
+            array.push(&parsed_record_to_js(record));
         }
         Ok(array.into())
     }

@@ -524,7 +524,7 @@ impl Anchors {
 
 // ── Record / RecordSet ────────────────────────────────────────────
 
-/// A single SIP-7 record.
+/// A single SIP-7 record (for constructing/packing).
 #[derive(uniffi::Enum)]
 pub enum Record {
     Seq { version: u64 },
@@ -533,6 +533,50 @@ pub enum Record {
     Blob { key: String, value: Vec<u8> },
     Sig { flags: u8, canonical: String, handle: String, sig: Vec<u8> },
     Unknown { rtype: u8, rdata: Vec<u8> },
+}
+
+/// A parsed SIP-7 record (from unpacking). Includes `Malformed` for invalid rdata.
+#[derive(uniffi::Enum)]
+pub enum ParsedRecord {
+    Seq { version: u64 },
+    Txt { key: String, value: Vec<String> },
+    Addr { key: String, value: Vec<String> },
+    Blob { key: String, value: Vec<u8> },
+    Sig { flags: u8, canonical: String, handle: String, sig: Vec<u8> },
+    Malformed { rtype: u8, rdata: Vec<u8> },
+    Unknown { rtype: u8, rdata: Vec<u8> },
+}
+
+impl<'a> From<sip7::ParsedRecord<'a>> for ParsedRecord {
+    fn from(p: sip7::ParsedRecord<'a>) -> Self {
+        match p {
+            sip7::ParsedRecord::Seq(version) => ParsedRecord::Seq { version },
+            sip7::ParsedRecord::Txt { key, value } => ParsedRecord::Txt {
+                key: String::from(key),
+                value: value.to_vec().into_iter().map(String::from).collect(),
+            },
+            sip7::ParsedRecord::Addr { key, value } => ParsedRecord::Addr {
+                key: String::from(key),
+                value: value.to_vec().into_iter().map(String::from).collect(),
+            },
+            sip7::ParsedRecord::Blob { key, value } => ParsedRecord::Blob {
+                key: String::from(key),
+                value: value.to_vec(),
+            },
+            sip7::ParsedRecord::Sig(sig) => ParsedRecord::Sig {
+                flags: sig.flags,
+                canonical: sig.canonical.to_owned().to_string(),
+                handle: sig.handle.to_owned().to_string(),
+                sig: sig.sig.to_vec(),
+            },
+            sip7::ParsedRecord::Malformed { rtype, rdata } => ParsedRecord::Malformed {
+                rtype, rdata: rdata.to_vec(),
+            },
+            sip7::ParsedRecord::Unknown { rtype, rdata } => ParsedRecord::Unknown {
+                rtype, rdata: rdata.to_vec(),
+            },
+        }
+    }
 }
 
 impl From<sip7::Record> for Record {
@@ -609,7 +653,7 @@ impl RecordSet {
     }
 
     /// Parse all records.
-    pub fn unpack(&self) -> Result<Vec<Record>, VeritasError> {
+    pub fn unpack(&self) -> Result<Vec<ParsedRecord>, VeritasError> {
         self.inner.unpack()
             .map(|records| records.into_iter().map(Into::into).collect())
             .map_err(|e| VeritasError::InvalidInput { msg: e.to_string() })

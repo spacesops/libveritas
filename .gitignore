@@ -28,3 +28,6 @@ examples/js/pkg
 
 # UniFFI generated bindings
 bindings/uniffi/bindings
+
+data/
+NOTES.md

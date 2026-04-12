@@ -14,8 +14,20 @@ borsh_utils = { workspace = true }
 borsh = { version = "1.6", features = ["derive", "std"] }
 bitcoin = { version = "0.32", default-features = false, features = ["rand-std"] }
 risc0-zkvm = { version = "3.0.5", default-features = false, features = ["std"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+base64 = "0.22"
+ureq = { version = "2", features = ["json"] }
+hex = "0.4"
 
 [[bin]]
 name = "generate-fixture"
 path = "../examples/generate_fixture.rs"
+
+[[bin]]
+name = "verify-certs"
+path = "../examples/verify_certs.rs"
+
+[[bin]]
+name = "live-verify"
+path = "../examples/live_verify.rs"

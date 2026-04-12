@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Mutex;
 use crate::cert::{Certificate, NumsSubtree};
-use crate::sname::{NameLike, SName};
 use crate::Zone;
 use spaces_protocol::slabel::SLabel;
+use spaces_protocol::sname::{NameLike, SName, Subname};
+
 
 /// Bidirectional name resolver for space handle hierarchies.
 ///
@@ -136,7 +137,7 @@ impl NameResolver {
 /// Build a 2-label SName from raw label bytes and a space SLabel.
 fn build_2label(label_bytes: &[u8], space: &SLabel) -> Option<SName> {
     let label_str = std::str::from_utf8(label_bytes).ok()?;
-    let label: crate::sname::Label = label_str.parse().ok()?;
+    let label: Subname = label_str.parse().ok()?;
     SName::join(&label, space).ok()
 }
 
@@ -389,10 +390,11 @@ mod tests {
             handle: sname,
             alias: alias.map(|n| n.to_slabel()),
             script_pubkey: ScriptBuf::from_bytes(vec![0x51, 0x20, 0x00]),
-            fallback_records: None,
-            records: None,
+            fallback_records: sip7::RecordSet::default(),
+            records: sip7::RecordSet::default(),
             delegate: crate::ProvableOption::Unknown,
             commitment: crate::ProvableOption::Unknown,
+            num_id: None,
         }
     }
 

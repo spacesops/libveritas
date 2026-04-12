@@ -21,7 +21,7 @@ use spaces_protocol::constants::ChainAnchor;
 use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
 use libveritas::{hash_signable_message, ProvableOption, SovereigntyState, Veritas, Zone};
 use libveritas::msg::{self, Message, QueryContext};
-use libveritas::sname::{Label, SName};
+use spaces_protocol::sname::{Subname, SName};
 
 fn sname(s: &str) -> SName {
     SName::from_str(s).unwrap()
@@ -31,8 +31,8 @@ fn slabel(s: &str) -> SLabel {
     SLabel::from_str(s).unwrap()
 }
 
-fn label(s: &str) -> Label {
-    Label::from_str(s).unwrap()
+fn label(s: &str) -> Subname {
+    Subname::from_str(s).unwrap()
 }
 
 fn sign_zone(zone: &Zone, keypair: &Keypair) -> Signature {
@@ -202,7 +202,7 @@ pub struct TestHandleTree {
     pub ds: TestDelegatedSpace,
     pub handle_tree: SubTree<Sha256Hasher>,
     pub commitments: Vec<TestCommitmentBundle>,
-    pub staged: HashMap<Label, StagedHandle>,
+    pub staged: HashMap<Subname, StagedHandle>,
 }
 
 pub struct StagedHandle {
@@ -212,8 +212,7 @@ pub struct StagedHandle {
 
 pub struct TestCommitmentBundle {
     root: [u8;32],
-    block_height: u32,
-    handles: HashMap<Label, TestHandle>,
+    handles: HashMap<Subname, TestHandle>,
     handle_tree: SubTree<Sha256Hasher>,
     receipt: Option<Receipt>,
 }
@@ -402,7 +401,7 @@ impl TestChain {
 }
 
 pub struct TestHandle {
-    pub name: Label,
+    pub name: Subname,
     pub genesis_spk: ScriptBuf,
     pub keypair: Keypair
 }
@@ -435,6 +434,7 @@ impl TestHandleTree {
         };
 
         let h = sname(&format!("{}{}", name, self.space));
+        let num_id = Some(NumId::from_spk::<KeyHash>(genesis_spk.clone()));
         let zone = Zone {
             anchor: 0,
             sovereignty: SovereigntyState::Dependent,
@@ -442,10 +442,11 @@ impl TestHandleTree {
             handle: h,
             alias: None,
             script_pubkey: genesis_spk,
-            fallback_records: None,
-            records: None,
+            fallback_records: sip7::RecordSet::default(),
+            records: sip7::RecordSet::default(),
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
+            num_id,
         };
 
         let signature = sign_zone(&zone, &self.ds.ptr.keypair);
@@ -461,7 +462,7 @@ impl TestHandleTree {
         assert!(!self.staged.is_empty(), "no handles to commit");
 
         let initial_root = self.handle_tree.compute_root().expect("compute root");
-        let handles: HashMap<Label, TestHandle> = std::mem::take(&mut self.staged)
+        let handles: HashMap<Subname, TestHandle> = std::mem::take(&mut self.staged)
             .into_iter()
             .map(|(k, v)| (k, v.handle))
             .collect();
@@ -506,7 +507,6 @@ impl TestHandleTree {
 
         self.commitments.push(TestCommitmentBundle {
             root: final_root,
-            block_height: onchain_commitment.block_height,
             handles,
             handle_tree: self.handle_tree.clone(),
             receipt,
@@ -900,10 +900,11 @@ fn verify_uses_better_cached_zone() {
         handle: sname("alice@bitcoin"),
         alias: None,
         script_pubkey: ScriptBuf::new(),
-        fallback_records: None,
-        records: None,
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::default(),
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
+        num_id: None,
     };
 
     let ctx = QueryContext::from_zones(vec![cached_zone.clone()]);

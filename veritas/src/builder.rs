@@ -1,16 +1,17 @@
 use std::collections::HashMap;
+use sip7::SIG_PRIMARY_ZONE;
 use crate::cert::{Certificate, CertificateChain, ChainProofRequestUtils, Witness};
-use crate::msg::{ChainProof, Message, OffchainRecords};
+use crate::msg::{ChainProof, Message, UnsignedRecordSet};
 use crate::names::NameResolver;
-use crate::sname::{NameLike, SName};
+use spaces_protocol::sname::{NameLike, SName};
 use crate::MessageError;
 use spaces_nums::ChainProofRequest;
 use spaces_protocol::slabel::SLabel;
 
 pub struct DataUpdateRequest {
     pub handle: SName,
-    pub records: Option<OffchainRecords>,
-    pub delegate_records: Option<OffchainRecords>,
+    pub records: Option<sip7::RecordSet>,
+    pub delegate_records: Option<sip7::RecordSet>,
 }
 
 pub struct MessageBuilder {
@@ -28,7 +29,7 @@ impl MessageBuilder {
 
     /// Add a .spacecert chain with records.
     /// The handle name is taken from the chain's subject.
-    pub fn add_handle(&mut self, chain: CertificateChain, records: OffchainRecords) {
+    pub fn add_handle(&mut self, chain: CertificateChain, records: sip7::RecordSet) {
         let handle = chain.subject().clone();
         self.certs.extend(chain.into_certs());
         self.updates.push(DataUpdateRequest {
@@ -46,7 +47,7 @@ impl MessageBuilder {
         self.certs.push(cert);
     }
 
-    pub fn add_records(&mut self, handle: SName, records: OffchainRecords) {
+    pub fn add_records(&mut self, handle: SName, records: sip7::RecordSet) {
         self.updates.push(DataUpdateRequest {
             handle,
             records: Some(records),
@@ -77,31 +78,55 @@ impl MessageBuilder {
 
     /// Build the message from a chain proof.
     ///
-    /// Deduplicates root certificates by looking up commitment block heights
-    /// from the chain proof, keeping the one with the most recent commitment.
-    /// Then assembles into bundles and applies all record updates.
-    pub fn build(self, chain: ChainProof) -> Result<Message, MessageError> {
+    /// Returns the message and unsigned record sets that need signing.
+    /// Call `unsigned.signing_id()` to get the hash, sign it,
+    /// then `unsigned.pack_sig(sig)` and `msg.set_records(canonical, signed)`.
+    pub fn build(self, chain: ChainProof) -> Result<(Message, Vec<UnsignedRecordSet>), MessageError> {
         let certs = dedup_root_certs(self.certs, &chain);
         let resolver = NameResolver::from_certificates(&certs, &chain.nums);
         let mut msg = Message::try_from_certificates(chain, certs)?;
+        let mut unsigned = Vec::new();
 
         for update in self.updates {
-            let handle = resolver.flatten(&update.handle);
+            let canonical = resolver.flatten(&update.handle);
+            let handle = update.handle.clone();
+
             if let Some(data) = update.records {
-                msg.set_records(&handle, data);
+                if data.sig().is_some() {
+                    msg.set_records(&canonical, data);
+                } else {
+                    unsigned.push(UnsignedRecordSet {
+                        handle: handle.clone(),
+                        canonical: canonical.clone(),
+                        flags: SIG_PRIMARY_ZONE,
+                        records: data,
+                        delegate: false,
+                    });
+                }
             }
             if let Some(data) = update.delegate_records {
-                msg.set_delegate_records(&handle, data);
+                if data.sig().is_some() {
+                    msg.set_delegate_records(&canonical, data);
+                } else {
+                    unsigned.push(UnsignedRecordSet {
+                        handle,
+                        canonical,
+                        flags: 0,
+                        records: data,
+                        delegate: false,
+                    });
+                }
             }
         }
 
-        Ok(msg)
+        Ok((msg, unsigned))
     }
 }
 
 impl Message {
     /// Update offchain data on an existing message.
     ///
+    /// Note: records passed here should already have Sig records appended.
     /// Construct a new message to update certificates.
     pub fn update(&mut self, updates: Vec<DataUpdateRequest>) {
         for update in updates {

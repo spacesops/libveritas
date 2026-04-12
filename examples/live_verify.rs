@@ -152,7 +152,7 @@ fn main() {
         nums: NumsSubtree(SubTree::<Sha256Hasher>::from_slice(&proof.ptrs_proof).unwrap()),
     };
 
-    let msg = builder.build(chain).expect("failed to build message");
+    let (msg, _unsigned) = builder.build(chain).expect("failed to build message");
 
     println!("\nVerifying ...");
     let veritas = Veritas::new()

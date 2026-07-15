@@ -8,6 +8,7 @@ bindings/react-native/src/generated
 bindings/react-native/cpp
 bindings/react-native/ios
 bindings/react-native/android
+bindings/react-native/build
 bindings/react-native/*.podspec
 bindings/react-native/*.xcframework
 
@@ -28,3 +29,7 @@ examples/js/pkg
 
 # UniFFI generated bindings
 bindings/uniffi/bindings
+
+data/
+NOTES.md
+.DS_Store

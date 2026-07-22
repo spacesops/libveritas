@@ -325,6 +325,7 @@ mod tests {
             },
             value: Default::default(),
             script_pubkey: genesis_spk.clone(),
+            spent: false,
         };
         // Use the num_id as the key — find_num scans values so key doesn't matter
         // but we need a unique key per entry.

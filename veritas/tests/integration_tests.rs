@@ -170,6 +170,7 @@ impl TestNum {
                 },
                 value: Default::default(),
                 script_pubkey,
+                spent: false,
             },
         };
 
@@ -494,7 +495,7 @@ impl TestHandleTree {
             .map(|(k, v)| (k, v.handle))
             .collect();
 
-        for (_, handle) in handles.iter() {
+        for handle in handles.values() {
             let handle_key = KeyHash::hash(handle.name.as_slabel().as_ref());
             let handle_out = HandleOut {
                 name: handle.name.as_slabel().clone(),

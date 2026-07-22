@@ -44,6 +44,8 @@ use std::sync::OnceLock;
 pub mod builder;
 pub mod cert;
 pub mod constants;
+#[cfg(feature = "inspect")]
+pub mod inspect;
 pub mod msg;
 pub mod names;
 
@@ -1172,6 +1174,11 @@ impl Veritas {
         self.anchors.iter().find(|a| a.block.height == anchor)
     }
 
+    /// Find a root anchor by block height. Returns `None` if absent.
+    pub fn find_anchor(&self, height: u32) -> Option<&RootAnchor> {
+        self.find_by_anchor(height)
+    }
+
     /// Extract parent zone from chain proofs and set sovereignty based on commitment finality.
     ///
     /// The space's inclusion proof is always required in the chain proof —
@@ -1710,7 +1717,7 @@ fn decode_journal(
         })
 }
 
-fn serialize_hash<S>(hash: &Hash, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_hash<S>(hash: &Hash, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -1721,7 +1728,7 @@ where
     }
 }
 
-fn deserialize_hash<'de, D>(deserializer: D) -> Result<Hash, D::Error>
+pub(crate) fn deserialize_hash<'de, D>(deserializer: D) -> Result<Hash, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -1754,7 +1761,7 @@ where
     }
 }
 
-fn deserialize_option_hash<'de, D>(deserializer: D) -> Result<Option<Hash>, D::Error>
+pub(crate) fn deserialize_option_hash<'de, D>(deserializer: D) -> Result<Option<Hash>, D::Error>
 where
     D: Deserializer<'de>,
 {

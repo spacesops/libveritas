@@ -122,7 +122,7 @@ impl MessageBuilder {
                         canonical,
                         flags: 0,
                         records: data,
-                        delegate: false,
+                        delegate: true,
                     });
                 }
             }

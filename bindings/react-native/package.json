@@ -14,6 +14,7 @@
     "ios",
     "android",
     "*.podspec",
+    "*.xcframework",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",

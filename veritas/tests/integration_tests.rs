@@ -170,6 +170,7 @@ impl TestNum {
                 },
                 value: Default::default(),
                 script_pubkey,
+                spent: false,
             },
         };
 
@@ -494,7 +495,7 @@ impl TestHandleTree {
             .map(|(k, v)| (k, v.handle))
             .collect();
 
-        for (_, handle) in handles.iter() {
+        for handle in handles.values() {
             let handle_key = KeyHash::hash(handle.name.as_slabel().as_ref());
             let handle_out = HandleOut {
                 name: handle.name.as_slabel().clone(),
@@ -953,9 +954,11 @@ fn verify_with_request_filter() {
         )
         .expect("verify");
 
-    // Should only return alice (root not requested, bob not requested)
-    assert_eq!(result.zones.len(), 1);
-    assert_eq!(result.zones[0].handle, sname("alice@bitcoin"));
+    // Returns alice plus the parent zone (needed to cache the verified
+    // receipt), but not bob.
+    assert_eq!(result.zones.len(), 2);
+    assert_eq!(result.zones[0].handle, sname("@bitcoin"));
+    assert_eq!(result.zones[1].handle, sname("alice@bitcoin"));
 }
 
 #[test]
@@ -1068,7 +1071,7 @@ fn certificate_iterator() {
 }
 
 #[test]
-fn certificate_iterator_leaves_only() {
+fn certificate_iterator_with_request_filter() {
     let f = Fixture::new();
     let veritas = f.veritas();
 
@@ -1086,8 +1089,135 @@ fn certificate_iterator_leaves_only() {
 
     let certs: Vec<Certificate> = result.certificates().collect();
 
-    // Should have only alice (no root since it wasn't requested)
-    assert_eq!(certs.len(), 1);
-    assert_eq!(certs[0].subject, sname("alice@bitcoin"));
-    assert!(matches!(certs[0].witness, Witness::Leaf { .. }));
+    // The parent zone is included for receipt caching, so the root cert
+    // comes first, followed by alice.
+    assert_eq!(certs.len(), 2);
+    assert_eq!(certs[0].subject, sname("@bitcoin"));
+    assert!(matches!(certs[0].witness, Witness::Root { .. }));
+    assert_eq!(certs[1].subject, sname("alice@bitcoin"));
+    assert!(matches!(certs[1].witness, Witness::Leaf { .. }));
+}
+
+#[test]
+fn equal_commitment_heights_fall_through_to_freshness() {
+    let mut commitment = libveritas::CommitmentInfo::empty();
+    commitment.onchain.block_height = 100;
+
+    let make = |anchor: u32| Zone {
+        anchor,
+        sovereignty: SovereigntyState::Sovereign,
+        canonical: sname("alice@bitcoin"),
+        handle: sname("alice@bitcoin"),
+        alias: None,
+        script_pubkey: ScriptBuf::new(),
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::default(),
+        delegate: ProvableOption::Unknown,
+        commitment: ProvableOption::Exists {
+            value: commitment.clone(),
+        },
+        num_id: None,
+        anchor_hash: [0u8; 32],
+    };
+
+    // Equal commitment heights must fall through to the remaining
+    // comparisons instead of declaring both zones better than each other.
+    let older = make(5);
+    let newer = make(10);
+    assert!(!older.is_better_than(&newer).unwrap());
+    assert!(newer.is_better_than(&older).unwrap());
+
+    // A stripped (Unknown) commitment never beats a proven one,
+    // regardless of anchor.
+    let mut unknown = make(u32::MAX);
+    unknown.commitment = ProvableOption::Unknown;
+    assert!(!unknown.is_better_than(&newer).unwrap());
+    assert!(newer.is_better_than(&unknown).unwrap());
+}
+
+#[test]
+fn fresher_records_beat_higher_anchor() {
+    let mut commitment = libveritas::CommitmentInfo::empty();
+    commitment.onchain.block_height = 100;
+
+    let make = |anchor: u32, seq: u64| Zone {
+        anchor,
+        sovereignty: SovereigntyState::Sovereign,
+        canonical: sname("alice@bitcoin"),
+        handle: sname("alice@bitcoin"),
+        alias: None,
+        script_pubkey: ScriptBuf::new(),
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::new(sip7::Record::seq(seq).pack().expect("pack seq")),
+        delegate: ProvableOption::Unknown,
+        commitment: ProvableOption::Exists {
+            value: commitment.clone(),
+        },
+        num_id: None,
+        anchor_hash: [0u8; 32],
+    };
+
+    // Replayed zone: staler records (lower seq) but a higher anchor.
+    // The fresher records must win — anchor is only a tiebreaker.
+    let stale_high_anchor = make(100, 1);
+    let fresh_low_anchor = make(5, 2);
+    assert!(!stale_high_anchor.is_better_than(&fresh_low_anchor).unwrap());
+    assert!(fresh_low_anchor.is_better_than(&stale_high_anchor).unwrap());
+
+    // Identical records: anchor breaks the tie.
+    let a = make(100, 3);
+    let b = make(5, 3);
+    assert!(a.is_better_than(&b).unwrap());
+    assert!(!b.is_better_than(&a).unwrap());
+}
+
+#[test]
+fn temporary_cert_rejected_when_name_taken_by_other_key() {
+    let mut f = Fixture::new();
+    let veritas = f.veritas();
+
+    // "charlie" is committed in the tip tree under its own genesis key.
+    // Forge a temporary cert binding "charlie" to a different key, with a
+    // valid delegate signature — the exclusion proof must still reject it.
+    let (attacker_spk, attacker_keypair) = gen_p2tr_spk();
+    let subject = sname("charlie@bitcoin");
+    let zone = Zone {
+        anchor: 0,
+        sovereignty: SovereigntyState::Dependent,
+        canonical: subject.clone(),
+        handle: subject,
+        alias: None,
+        script_pubkey: attacker_spk.clone(),
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::default(),
+        delegate: ProvableOption::Unknown,
+        commitment: ProvableOption::Unknown,
+        num_id: Some(NumId::from_spk::<KeyHash>(attacker_spk.clone())),
+        anchor_hash: [0u8; 32],
+    };
+    let signature = sign_zone(&zone, &f.handles.ds.ptr.keypair);
+    f.handles.staged.insert(
+        label("charlie"),
+        StagedHandle {
+            handle: TestHandle {
+                name: label("charlie"),
+                genesis_spk: attacker_spk,
+                keypair: attacker_keypair,
+            },
+            signature,
+        },
+    );
+
+    let err = match veritas.verify_with_options(
+        &QueryContext::new(),
+        f.temporary_message("charlie"),
+        libveritas::VERIFY_DEV_MODE,
+    ) {
+        Ok(_) => panic!("temporary cert for a taken name must be rejected"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(err, libveritas::MessageError::HandleAlreadyExists { .. }),
+        "expected HandleAlreadyExists, got: {err}"
+    );
 }

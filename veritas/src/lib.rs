@@ -44,6 +44,8 @@ use std::sync::OnceLock;
 pub mod builder;
 pub mod cert;
 pub mod constants;
+#[cfg(feature = "inspect")]
+pub mod inspect;
 pub mod msg;
 pub mod names;
 
@@ -67,6 +69,10 @@ pub struct VerifiedMessage {
 
 impl VerifiedMessage {
     /// Iterate over all certificates from this verified message.
+    ///
+    /// Panics if the message was not produced by [`Veritas::verify`] and
+    /// contains handle names that don't join with their bundle's subject —
+    /// verification guarantees every kept handle is joinable.
     pub fn certificates(&self) -> CertificateIter<'_> {
         CertificateIter {
             zones: &self.zones,
@@ -100,7 +106,8 @@ impl<'a> Iterator for CertificateIter<'a> {
                 if let Some(h) = handles.next() {
                     let bundle = self.current_bundle?;
                     let epoch = self.current_epoch?;
-                    let subject = SName::join(&h.name, &bundle.subject).ok()?;
+                    let subject = SName::join(&h.name, &bundle.subject)
+                        .expect("handle names in a verified message are joinable");
 
                     return Some(Certificate::new(
                         subject,
@@ -495,18 +502,14 @@ pub fn verify_schnorr(
 }
 
 /// Compare two record sets by seq then data hash (for Zone freshness comparison).
-fn records_is_better(a: &sip7::RecordSet, b: &sip7::RecordSet) -> bool {
+fn records_cmp(a: &sip7::RecordSet, b: &sip7::RecordSet) -> std::cmp::Ordering {
     let a_seq = a.seq().unwrap_or(0);
     let b_seq = b.seq().unwrap_or(0);
-    if a_seq != b_seq {
-        return a_seq > b_seq;
-    }
-    let hash_a = Sha256Hasher::hash(a.as_slice());
-    let hash_b = Sha256Hasher::hash(b.as_slice());
-    if hash_a != hash_b {
-        return hash_a > hash_b;
-    }
-    false
+    a_seq.cmp(&b_seq).then_with(|| {
+        let hash_a = Sha256Hasher::hash(a.as_slice());
+        let hash_b = Sha256Hasher::hash(b.as_slice());
+        hash_a.cmp(&hash_b)
+    })
 }
 
 impl Zone {
@@ -540,11 +543,10 @@ impl Zone {
         signature: &Signature,
         signer: &ScriptBuf,
     ) -> Result<(), SignatureError> {
-        let script_bytes = signer.as_bytes();
-        if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
+        if !signer.is_p2tr() {
             return Err(SignatureError::InvalidPublicKey);
         }
-        let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
+        let pubkey = XOnlyPublicKey::from_slice(&signer.as_bytes()[2..])
             .map_err(|_| SignatureError::InvalidPublicKey)?;
 
         let msg = hash_signable_message(&self.signing_bytes());
@@ -574,15 +576,20 @@ impl Zone {
             return Err(ZoneCompareError::DifferentHandles);
         }
 
-        // Higher commitment height = newer committed state
+        // Higher commitment height = newer committed state.
+        // Equal heights fall through to the delegate/records/anchor comparisons.
         match (&self.commitment, &other.commitment) {
             (ProvableOption::Exists { value: a }, ProvableOption::Exists { value: b })
                 if a.onchain.block_height != b.onchain.block_height =>
             {
                 return Ok(a.onchain.block_height > b.onchain.block_height);
             }
-            (ProvableOption::Exists { .. }, _) => return Ok(true),
-            (_, ProvableOption::Exists { .. }) => return Ok(false),
+            (ProvableOption::Exists { .. }, ProvableOption::Empty | ProvableOption::Unknown) => {
+                return Ok(true);
+            }
+            (ProvableOption::Empty | ProvableOption::Unknown, ProvableOption::Exists { .. }) => {
+                return Ok(false);
+            }
             (ProvableOption::Empty, ProvableOption::Unknown) => return Ok(true),
             (ProvableOption::Unknown, ProvableOption::Empty) => return Ok(false),
             _ => {}
@@ -599,8 +606,10 @@ impl Zone {
                 if b.records.is_empty() {
                     return Ok(true);
                 }
-                if records_is_better(&a.records, &b.records) {
-                    return Ok(true);
+                match records_cmp(&a.records, &b.records) {
+                    std::cmp::Ordering::Greater => return Ok(true),
+                    std::cmp::Ordering::Less => return Ok(false),
+                    std::cmp::Ordering::Equal => {}
                 }
             }
             (ProvableOption::Exists { .. }, ProvableOption::Empty | ProvableOption::Unknown) => {
@@ -622,8 +631,10 @@ impl Zone {
             if other.records.is_empty() {
                 return Ok(true);
             }
-            if records_is_better(&self.records, &other.records) {
-                return Ok(true);
+            match records_cmp(&self.records, &other.records) {
+                std::cmp::Ordering::Greater => return Ok(true),
+                std::cmp::Ordering::Less => return Ok(false),
+                std::cmp::Ordering::Equal => {}
             }
         }
 
@@ -840,10 +851,11 @@ impl Veritas {
 
         let mut zones = Vec::new();
         let mut verified_bundles = Vec::new();
+        let nums_verified = anchor.nums_root.is_some();
 
         for bundle in msg.spaces {
             let (bundle_zones, verified_bundle) =
-                self.verify_bundle(ctx, &msg.chain, options, bundle)?;
+                self.verify_bundle(ctx, &msg.chain, options, bundle, nums_verified)?;
             zones.extend(bundle_zones);
             if let Some(vb) = verified_bundle {
                 verified_bundles.push(vb);
@@ -873,10 +885,11 @@ impl Veritas {
         chain: &msg::ChainProof,
         options: u32,
         bundle: msg::Bundle,
+        nums_verified: bool,
     ) -> Result<(Vec<Zone>, Option<msg::Bundle>), MessageError> {
         let space = bundle.subject.clone();
         let cached_parent = ctx.get_parent_zone(&space);
-        let mut extracted = self.extract_parent_zone(chain, &bundle)?;
+        let mut extracted = self.extract_parent_zone(chain, &bundle, nums_verified)?;
 
         let root_handle = SName::from_space(&space);
 
@@ -884,27 +897,25 @@ impl Veritas {
         let mut receipt_verified = false;
 
         // Resolve which parent zone to use
-        let target_zone: &Zone = match (&cached_parent, &mut extracted) {
-            (Some(cached), Some(zone)) => {
-                zone.update_receipt_cache(cached);
-                if zone.is_better_than(cached).unwrap_or(false) {
-                    receipt_verified =
-                        maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, options)?;
-                    zone
+        let target_zone: &Zone = match &cached_parent {
+            Some(cached) => {
+                extracted.update_receipt_cache(cached);
+                if extracted.is_better_than(cached).unwrap_or(false) {
+                    receipt_verified = maybe_verify_receipt(
+                        &mut extracted,
+                        bundle.receipt.as_ref(),
+                        &space,
+                        options,
+                    )?;
+                    &extracted
                 } else {
                     cached
                 }
             }
-            (Some(cached), None) => cached,
-            (None, Some(zone)) => {
+            None => {
                 receipt_verified =
-                    maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, options)?;
-                zone
-            }
-            (None, None) => {
-                return Err(MessageError::ParentZoneRequired {
-                    space: space.to_string(),
-                });
+                    maybe_verify_receipt(&mut extracted, bundle.receipt.as_ref(), &space, options)?;
+                &extracted
             }
         };
 
@@ -1033,6 +1044,13 @@ impl Veritas {
             }
         }
 
+        // Callers that only requested handles still need the parent zone —
+        // it carries the verified receipt_hash they must cache to avoid
+        // re-verifying receipts on future queries.
+        if !wants_root && !zones.is_empty() {
+            zones.insert(0, target_zone.clone());
+        }
+
         // Build verified bundle if anything was verified
         let verified_bundle = if wants_root || !verified_epochs.is_empty() {
             Some(msg::Bundle {
@@ -1106,21 +1124,33 @@ impl Veritas {
             });
         }
 
-        if let Some(expected) = anchor.nums_root {
-            let nums_root =
-                msg.chain
-                    .nums
-                    .compute_root()
-                    .map_err(|_| MessageError::NumsRootMismatch {
-                        expected: Some(expected),
-                        got: [0u8; 32],
-                    })?;
+        match anchor.nums_root {
+            Some(expected) => {
+                let nums_root =
+                    msg.chain
+                        .nums
+                        .compute_root()
+                        .map_err(|_| MessageError::NumsRootMismatch {
+                            expected: Some(expected),
+                            got: [0u8; 32],
+                        })?;
 
-            if nums_root != expected {
-                return Err(MessageError::NumsRootMismatch {
-                    expected: Some(expected),
-                    got: nums_root,
-                });
+                if nums_root != expected {
+                    return Err(MessageError::NumsRootMismatch {
+                        expected: Some(expected),
+                        got: nums_root,
+                    });
+                }
+            }
+            None => {
+                // No trusted nums root: a non-empty nums proof cannot be
+                // verified against anything and must not be accepted.
+                if !msg.chain.nums.0.is_empty() {
+                    return Err(MessageError::NumsRootMismatch {
+                        expected: None,
+                        got: msg.chain.nums.compute_root().unwrap_or([0u8; 32]),
+                    });
+                }
             }
         }
 
@@ -1144,12 +1174,21 @@ impl Veritas {
         self.anchors.iter().find(|a| a.block.height == anchor)
     }
 
+    /// Find a root anchor by block height. Returns `None` if absent.
+    pub fn find_anchor(&self, height: u32) -> Option<&RootAnchor> {
+        self.find_by_anchor(height)
+    }
+
     /// Extract parent zone from chain proofs and set sovereignty based on commitment finality.
+    ///
+    /// The space's inclusion proof is always required in the chain proof —
+    /// only the ZK receipt can be substituted by a cached zone.
     fn extract_parent_zone(
         &self,
         chain: &msg::ChainProof,
         bundle: &msg::Bundle,
-    ) -> Result<Option<Zone>, MessageError> {
+        nums_verified: bool,
+    ) -> Result<Zone, MessageError> {
         let mut num_id = None;
         let (spk, records) = if !bundle.subject.is_numeric() {
             let Some(spaceout) = chain.spaces.find_space(&bundle.subject) else {
@@ -1169,6 +1208,11 @@ impl Veritas {
                 .unwrap_or_default();
             (spaceout.script_pubkey, data)
         } else {
+            if !nums_verified {
+                return Err(MessageError::NumsRootMissing {
+                    space: bundle.subject.to_string(),
+                });
+            }
             let Some(numout) = chain
                 .nums
                 .find_numeric(&bundle.subject.clone().try_into().expect("numeric"))
@@ -1215,6 +1259,12 @@ impl Veritas {
                 }
             })?;
             z.records = records.clone();
+        }
+
+        // Without a trusted nums root, delegate and commitment cannot be
+        // proven present or absent — leave them Unknown.
+        if !nums_verified {
+            return Ok(z);
         }
 
         // Extract delegate info
@@ -1265,7 +1315,7 @@ impl Veritas {
             }
         }
 
-        Ok(Some(z))
+        Ok(z)
     }
 }
 
@@ -1277,10 +1327,11 @@ fn verify_temporary_handle(
     epoch_tree: &cert::HandleSubtree,
     parent_zone: &Zone,
 ) -> Result<Zone, MessageError> {
-    // Empty tree = nothing exists, otherwise check exclusion
-    let exists = !epoch_tree.0.is_empty()
-        && epoch_tree
-            .contains_subspace(&handle.name, &handle.genesis_spk)
+    // Exclusion: the name must be provably absent. A leaf bound to a
+    // different genesis key still means the name is taken.
+    let exists =
+        epoch_tree
+            .contains_name(&handle.name)
             .map_err(|e| MessageError::HandleProofMalformed {
                 handle: subject.to_string(),
                 reason: e.to_string(),
@@ -1445,6 +1496,8 @@ pub enum MessageError {
     SpacesRootMismatch { expected: Hash, got: Hash },
     /// Nums proof root doesn't match anchor
     NumsRootMismatch { expected: Option<Hash>, got: Hash },
+    /// Anchor has no nums root, so nums-dependent data cannot be verified
+    NumsRootMissing { space: String },
     /// Space not found in spaces proof
     SpaceNotFound { space: String },
     /// Numeric space not found in nums proof
@@ -1453,8 +1506,6 @@ pub enum MessageError {
     CommitmentNotFound { space: String, root: Hash },
     /// Receipt required but not provided
     ReceiptRequired { space: String },
-    /// Parent zone could not be extracted from proof
-    ParentZoneRequired { space: String },
     /// Handle subtree proof is malformed
     HandleProofMalformed { handle: String, reason: String },
     /// Duplicate epoch root in bundle
@@ -1539,6 +1590,13 @@ impl fmt::Display for MessageError {
                     hex::encode(got)
                 )
             }
+            Self::NumsRootMissing { space } => {
+                write!(
+                    f,
+                    "anchor has no nums root, cannot verify nums data for {}",
+                    space
+                )
+            }
             Self::SpaceNotFound { space } => {
                 write!(f, "space {} not found in proof", space)
             }
@@ -1555,9 +1613,6 @@ impl fmt::Display for MessageError {
             }
             Self::ReceiptRequired { space } => {
                 write!(f, "receipt required for {}", space)
-            }
-            Self::ParentZoneRequired { space } => {
-                write!(f, "parent zone required for {}", space)
             }
             Self::HandleProofMalformed { handle, reason } => {
                 write!(f, "handle proof malformed for {}: {}", handle, reason)
@@ -1662,7 +1717,7 @@ fn decode_journal(
         })
 }
 
-fn serialize_hash<S>(hash: &Hash, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_hash<S>(hash: &Hash, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -1673,7 +1728,7 @@ where
     }
 }
 
-fn deserialize_hash<'de, D>(deserializer: D) -> Result<Hash, D::Error>
+pub(crate) fn deserialize_hash<'de, D>(deserializer: D) -> Result<Hash, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -1687,7 +1742,10 @@ where
     }
 }
 
-fn serialize_option_hash<S>(hash: &Option<Hash>, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_option_hash<S>(
+    hash: &Option<Hash>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -1703,7 +1761,7 @@ where
     }
 }
 
-fn deserialize_option_hash<'de, D>(deserializer: D) -> Result<Option<Hash>, D::Error>
+pub(crate) fn deserialize_option_hash<'de, D>(deserializer: D) -> Result<Option<Hash>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -1747,7 +1805,6 @@ fn verify_zk_journal_matches_onchain(
     Ok(())
 }
 
-// Retrieve parent zone without zk verification
 fn hash_receipt(receipt: &Receipt) -> Hash {
-    Sha256Hasher::hash(&borsh::to_vec(receipt).unwrap_or_default())
+    Sha256Hasher::hash(&borsh::to_vec(receipt).expect("receipt serialization should not fail"))
 }

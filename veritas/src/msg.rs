@@ -243,7 +243,10 @@ pub struct ChainProof {
 pub struct Bundle {
     /// Space subject (e.g., `@bitcoin`, `#222-2-2`).
     pub subject: SLabel,
-    /// ZK receipt for the tip epoch (None if finalized or first commitment).
+    /// ZK receipt for the tip epoch. May be None only for a first commitment
+    /// (no prior state to prove a transition from) or when the verifier's
+    /// context already holds a zone whose receipt was verified for this or a
+    /// newer commitment. On-chain finality does NOT remove the need for it.
     pub receipt: Option<Receipt>,
     /// Owner-signed records (RecordSet with embedded Sig record).
     pub records: Option<sip7::RecordSet>,
@@ -312,11 +315,10 @@ pub fn verify_records(
         return Err(crate::SignatureError::SignerMismatch);
     }
 
-    let script_bytes = script_pubkey.as_bytes();
-    if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
+    if !script_pubkey.is_p2tr() {
         return Err(crate::SignatureError::InvalidPublicKey);
     }
-    let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
+    let pubkey = XOnlyPublicKey::from_slice(&script_pubkey.as_bytes()[2..])
         .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
     let msg = crate::hash_signable_message(signable.bytes);
     let sig = secp256k1::schnorr::Signature::from_slice(&sig_data.sig)

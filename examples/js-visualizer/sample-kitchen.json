@@ -1,0 +1,1521 @@
+{
+  "anchor": {
+    "block_height": 290,
+    "block_hash": "1e74ef0c7eb342b67ecf6081489b7ee708eb2e7a3671bcc0a2c6b4c573348043",
+    "spaces_root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+    "nums_root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+    "anchor_hash": "a11c716bb9a9e046934c13b0aae0ab32285ce880661161d31f88c12c9210837c"
+  },
+  "zones": [
+    {
+      "handle": "@kitchensink",
+      "kind": "space",
+      "sovereignty": "sovereign",
+      "receipt": {
+        "kind": "fold",
+        "initial_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+        "final_root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+        "rolling_hash": "3b26fff542f3ccc7db2c40a573c30421d014496d45362f528c32d5645f2756bf",
+        "policy_ok": true
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment_tip",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "fcdc45f7c1d2a783ffa7641aa43149d6ff12e609dae3da4b17aa4aa47d142ed0",
+          "resolution": "included",
+          "leaf": {
+            "key": "fcdc45f7c1d2a783ffa7641aa43149d6ff12e609dae3da4b17aa4aa47d142ed0",
+            "value_hash": "205ce40aeba8eb1548c021f10d4779d41a18c574199a594c8b7fa6c3bccb7383",
+            "value_kind": "CommitmentTip",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "4e4be84356cd379055aa56aed5ea51809564041378edc641b5554170b2d08320"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "7ebcddd4acb031828bd2dc185de6a97e0350032fbb299d5ecbc547877accbad2"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 290,
+            "state_root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+            "prev_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+            "value_hash": "4accf80b3f34bb68f7797b7a11bbe08915a9061a530ed1245f87bd7737ca3d63",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "4e4be84356cd379055aa56aed5ea51809564041378edc641b5554170b2d08320"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "f56131f6865d34558d4c45b2ee1cd21b3e6fe83d91567897864d5a879982aaba"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "bob@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "sovereign",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "bob@kitchensink",
+          "handle": "bob@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "7ad07b7be7be06a8beab7fac263eaa7b9368a1b9af4c99460b4e0b281818a592",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 0,
+            "state_root": "26b62c21283f8e9bd50ee74cf3b6b9a5e1af62334b6bbe2b5c420a50525b40db",
+            "genesis": true,
+            "directly_proven": false
+          },
+          "leaf": {
+            "key": "7ad07b7be7be06a8beab7fac263eaa7b9368a1b9af4c99460b4e0b281818a592",
+            "value_hash": "8fd0fa91b5b1c3ef2bd7c95cd064fafb7c6e6c1931e52cd572109a9fc308b48e",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "726d76bc97f93f4aee0e94df915f8240583bed91166ca7380086f01cafcc9be1"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "26b62c21283f8e9bd50ee74cf3b6b9a5e1af62334b6bbe2b5c420a50525b40db",
+          "key": "0fb78075c9f16b7770436b0ca4b18bbd4023d0cc531accac024f5ca95483f4d9",
+          "resolution": "included",
+          "leaf": {
+            "key": "0fb78075c9f16b7770436b0ca4b18bbd4023d0cc531accac024f5ca95483f4d9",
+            "value_hash": "c84a0f255cb3e90377da776600acfe1f9bbe1c6987309eb399e13f40bfd6712e",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 5,
+              "prefix": "08",
+              "direction": "right",
+              "sibling_hash": "1052434b2b03615cd5bbdbf853e2250d385ef407da6de6cf64e603a94aa3e897"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "key_rotation",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "alice@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "sovereign",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "alice@kitchensink",
+          "handle": "alice@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "7ad07b7be7be06a8beab7fac263eaa7b9368a1b9af4c99460b4e0b281818a592",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 0,
+            "state_root": "26b62c21283f8e9bd50ee74cf3b6b9a5e1af62334b6bbe2b5c420a50525b40db",
+            "genesis": true,
+            "directly_proven": false
+          },
+          "leaf": {
+            "key": "7ad07b7be7be06a8beab7fac263eaa7b9368a1b9af4c99460b4e0b281818a592",
+            "value_hash": "8fd0fa91b5b1c3ef2bd7c95cd064fafb7c6e6c1931e52cd572109a9fc308b48e",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "726d76bc97f93f4aee0e94df915f8240583bed91166ca7380086f01cafcc9be1"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "26b62c21283f8e9bd50ee74cf3b6b9a5e1af62334b6bbe2b5c420a50525b40db",
+          "key": "0b8922c1e1391f94e444dfbf07a36c7f4e62806135467ccb6ef4af6bb74f7218",
+          "resolution": "included",
+          "leaf": {
+            "key": "0b8922c1e1391f94e444dfbf07a36c7f4e62806135467ccb6ef4af6bb74f7218",
+            "value_hash": "8b5d844212c2372ffd5885b0bc31d5c1842ba19db1250b4c77eea6b546ad684c",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 5,
+              "prefix": "08",
+              "direction": "left",
+              "sibling_hash": "2704aaf40b6bb25f91748dfc576490879416225860174b1aa472799649cbe0d6"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "key_rotation",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "dave@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "sovereign",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "dave@kitchensink",
+          "handle": "dave@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "35230ecaf5e4bbd0b45713507840caee6880304200691aedc02dc693cb38752e",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 145,
+            "state_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "prev_root": "26b62c21283f8e9bd50ee74cf3b6b9a5e1af62334b6bbe2b5c420a50525b40db",
+            "genesis": false,
+            "directly_proven": false
+          },
+          "leaf": {
+            "key": "35230ecaf5e4bbd0b45713507840caee6880304200691aedc02dc693cb38752e",
+            "value_hash": "9814c73886c14873ca37f76a6d29a0e0e5ab9e79f839cba6775ebce890b87f51",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "06735f0ca1be69c0f414497b00c75d2f1663584217c9c3229f577e05cef62531"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 1,
+              "prefix": "80",
+              "direction": "right",
+              "sibling_hash": "24356a56fe27834471deb9dee02bfddf5aa43cf2cd8bb57a8ccc118ba6f18de3"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+          "key": "825ade35a0b86f460e7191cd3ecf7b3b482718ec4b019491b08044c522bf2aa8",
+          "resolution": "included",
+          "leaf": {
+            "key": "825ade35a0b86f460e7191cd3ecf7b3b482718ec4b019491b08044c522bf2aa8",
+            "value_hash": "42af4105445d371fb35877cab359810eb0d5e714c7a1019e6e267b3f1097b43e",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "46d88794c928d4332c38936d37ca754610e485988417e5448977059c77dd9762"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6f2317c7b2ba11e045c63b24d073325539654686134d1aa6c44edd143e3bf78b"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "key_rotation",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "charlie@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "sovereign",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "charlie@kitchensink",
+          "handle": "charlie@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "35230ecaf5e4bbd0b45713507840caee6880304200691aedc02dc693cb38752e",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 145,
+            "state_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "prev_root": "26b62c21283f8e9bd50ee74cf3b6b9a5e1af62334b6bbe2b5c420a50525b40db",
+            "genesis": false,
+            "directly_proven": false
+          },
+          "leaf": {
+            "key": "35230ecaf5e4bbd0b45713507840caee6880304200691aedc02dc693cb38752e",
+            "value_hash": "9814c73886c14873ca37f76a6d29a0e0e5ab9e79f839cba6775ebce890b87f51",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "06735f0ca1be69c0f414497b00c75d2f1663584217c9c3229f577e05cef62531"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 1,
+              "prefix": "80",
+              "direction": "right",
+              "sibling_hash": "24356a56fe27834471deb9dee02bfddf5aa43cf2cd8bb57a8ccc118ba6f18de3"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+          "key": "e0aac3a0ae1be2f1aee6840f29b09d23b7b6ca3d16f7e48c397130346a41a5ff",
+          "resolution": "included",
+          "leaf": {
+            "key": "e0aac3a0ae1be2f1aee6840f29b09d23b7b6ca3d16f7e48c397130346a41a5ff",
+            "value_hash": "28b500cedba0b9166df7e5a7b29035bdf1d036ef30a71cd5d275f29d11afb949",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "46d88794c928d4332c38936d37ca754610e485988417e5448977059c77dd9762"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "d08bb1d6a307e5e23965bf3c981bc94df79e964c63cab3bc1da983906043c4c9"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "key_rotation",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "eve@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "pending",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "eve@kitchensink",
+          "handle": "eve@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 290,
+            "state_root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+            "prev_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+            "value_hash": "4accf80b3f34bb68f7797b7a11bbe08915a9061a530ed1245f87bd7737ca3d63",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "4e4be84356cd379055aa56aed5ea51809564041378edc641b5554170b2d08320"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "f56131f6865d34558d4c45b2ee1cd21b3e6fe83d91567897864d5a879982aaba"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+          "key": "7d6adfe0a2f33b34d63cce42358a1e5db014a06e45356a30aa8f4faa9a0f7145",
+          "resolution": "included",
+          "leaf": {
+            "key": "7d6adfe0a2f33b34d63cce42358a1e5db014a06e45356a30aa8f4faa9a0f7145",
+            "value_hash": "46cd8f2278341cfa0c2d4cb930dd70b9754030c7142104f8ad71a7e62969d8de",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "3cf5554fb831c6036da7bb0c19eee42c87372319aa8274ebb8ef86b30ac4e49a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "9a8ee3927469047abb213dff08a6c6f497db27c432df66a643e01e0d53936a2a"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "key_rotation",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "frank@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "pending",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "frank@kitchensink",
+          "handle": "frank@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 290,
+            "state_root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+            "prev_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+            "value_hash": "4accf80b3f34bb68f7797b7a11bbe08915a9061a530ed1245f87bd7737ca3d63",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "4e4be84356cd379055aa56aed5ea51809564041378edc641b5554170b2d08320"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "f56131f6865d34558d4c45b2ee1cd21b3e6fe83d91567897864d5a879982aaba"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+          "key": "960a215e80aef42b2e54fb3417fedb783e748288791ca334834799ce47a10e52",
+          "resolution": "included",
+          "leaf": {
+            "key": "960a215e80aef42b2e54fb3417fedb783e748288791ca334834799ce47a10e52",
+            "value_hash": "607ce84233cea0c272d5aa145c257bba3418227168dd39d91d8bb68ea87f71d4",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "7c7804c2508aa439aa4d2007d622af65edc943818e888360dd43edd6537b8069"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6f2317c7b2ba11e045c63b24d073325539654686134d1aa6c44edd143e3bf78b"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "d08bb1d6a307e5e23965bf3c981bc94df79e964c63cab3bc1da983906043c4c9"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "key_rotation",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "grace@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "dependent",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "grace@kitchensink",
+          "handle": "grace@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 290,
+            "state_root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+            "prev_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+            "value_hash": "4accf80b3f34bb68f7797b7a11bbe08915a9061a530ed1245f87bd7737ca3d63",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "4e4be84356cd379055aa56aed5ea51809564041378edc641b5554170b2d08320"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "f56131f6865d34558d4c45b2ee1cd21b3e6fe83d91567897864d5a879982aaba"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_exclusion",
+          "root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+          "key": "9c465abe97af2905e52b5194eb0fff6fc0c1cef5ba2de7273dfd55e9f0f6bbf4",
+          "resolution": "provably_excluded",
+          "leaf": {
+            "key": "960a215e80aef42b2e54fb3417fedb783e748288791ca334834799ce47a10e52",
+            "value_hash": "607ce84233cea0c272d5aa145c257bba3418227168dd39d91d8bb68ea87f71d4",
+            "value_kind": "HandleOut",
+            "matched": false
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "7c7804c2508aa439aa4d2007d622af65edc943818e888360dd43edd6537b8069"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6f2317c7b2ba11e045c63b24d073325539654686134d1aa6c44edd143e3bf78b"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "d08bb1d6a307e5e23965bf3c981bc94df79e964c63cab3bc1da983906043c4c9"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "heidi@kitchensink",
+      "kind": "handle",
+      "parent": "@kitchensink",
+      "sovereignty": "dependent",
+      "records": {
+        "owner": {
+          "seq": 0,
+          "flags": 1,
+          "canonical": "heidi@kitchensink",
+          "handle": "heidi@kitchensink"
+        }
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "9401ff8bbaa6661ae1fdd2dcd6d9204a4914a95c2ae0f1aee7185077087f6c13",
+          "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+          "resolution": "included",
+          "leaf": {
+            "key": "6b49763f2ac9ce44c2cc901417485f3b0e585875e7432ff3629191dd1e20bfe7",
+            "value_hash": "489754b0edb7106b2e65628bdd266dce63113a095eb19418fc518b66403ce9b9",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "3b20f874e6b84db3fb7e98e8a56fafd01f0fe2bd6eae110cbe28d4b499027e08"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "delegate_lookup",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+          "resolution": "included",
+          "leaf": {
+            "key": "42f7797ae20eb06dc7efabf2663a4cc0d33ee086540efb26654de2cebae8416d",
+            "value_hash": "842128a1f840246728a91e73b6b4f09b179cc6026d6f2d891bb1a23c02d2bfa6",
+            "value_kind": "NumOut",
+            "spent": false,
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "e98b073f65be11e9d8cb56f6ff04f435bcae522566028f0d579b470ca1cca63a"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "c0edb87e4147c05aa27f2b1694db42861ff17d205c6684f0f41e6477b7bf0eb7"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "d5a339d69d297a7ce59bc79126c00eabcbb917b601c4b6eba71cbe03c924caf1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "e790839640a2728667d1faab4afcf6cd8e43cd191ba94ce86a53790f681e4a66",
+          "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 290,
+            "state_root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+            "prev_root": "66b70febe9789b71a9e1d89b409869eb175c7160b7ad2b8a38385fb2a64bd2e6",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "91c6298d2b8573bf747a5c5e053ebdf703d60dfd4cf2d05066048fcf2c6b7ddc",
+            "value_hash": "4accf80b3f34bb68f7797b7a11bbe08915a9061a530ed1245f87bd7737ca3d63",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "4e4be84356cd379055aa56aed5ea51809564041378edc641b5554170b2d08320"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "f56131f6865d34558d4c45b2ee1cd21b3e6fe83d91567897864d5a879982aaba"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_exclusion",
+          "root": "2c95c7fc3e39bb86925339b420ae642af460d1a0615893610f2309f0c6c1b79e",
+          "key": "ace7fadff468697f1b62a8c1eaed2acfe3121fe5d2765c9990c487b3c40a7645",
+          "resolution": "provably_excluded",
+          "leaf": null,
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "7c7804c2508aa439aa4d2007d622af65edc943818e888360dd43edd6537b8069"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6f2317c7b2ba11e045c63b24d073325539654686134d1aa6c44edd143e3bf78b"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

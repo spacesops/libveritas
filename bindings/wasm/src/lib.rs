@@ -469,6 +469,19 @@ impl Veritas {
             .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(VerifiedMessage { inner })
     }
+
+    /// Inspect proof paths in a message (for visualization).
+    ///
+    /// Returns a structured report of the merkle paths through spaces_root,
+    /// nums_root, and per-epoch handles_root — without performing ZK or
+    /// signature verification. Pair with `verify` if validation is needed.
+    #[cfg(feature = "inspect")]
+    #[wasm_bindgen(js_name = "inspectProof")]
+    pub fn inspect_proof(&self, msg: &Message) -> Result<JsValue, JsError> {
+        let report = libveritas::inspect::inspect(&self.inner, &msg.inner)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        to_js(&report)
+    }
 }
 
 /// Result of verifying a message.

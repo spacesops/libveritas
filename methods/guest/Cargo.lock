@@ -672,7 +672,7 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "libveritas_zk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "borsh",
  "serde",
@@ -1210,8 +1210,9 @@ dependencies = [
 
 [[package]]
 name = "spacedb"
-version = "0.0.12"
-source = "git+https://github.com/spacesprotocol/spacedb.git#92c150ea5a368c7ec894ef3530992abd2f7d6012"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a48cda82e951391df9d0a54c96f8b04e117ff39abad5359b181cb71c80798d77"
 dependencies = [
  "borsh",
  "sha2",

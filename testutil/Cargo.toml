@@ -1,11 +1,20 @@
 [package]
 name = "libveritas_testutil"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "Test fixtures and helpers for libveritas — simulated chain state, handle trees, and a fixture generator."
+documentation = "https://docs.rs/libveritas_testutil"
+keywords = ["spaces", "testing", "fixture"]
+categories = ["development-tools::testing"]
 
 [dependencies]
-libveritas = { path = "../veritas" }
-libveritas_zk = { path = "../zk" }
+libveritas = { workspace = true }
+libveritas_zk = { workspace = true }
 sip7 = { workspace = true }
 spacedb = { workspace = true }
 spaces_protocol = { workspace = true }
@@ -22,7 +31,7 @@ hex = "0.4"
 
 [[bin]]
 name = "generate-fixture"
-path = "../examples/generate_fixture.rs"
+path = "examples/generate_fixture.rs"
 
 [[bin]]
 name = "verify-certs"

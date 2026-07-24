@@ -1,0 +1,615 @@
+{
+  "anchor": {
+    "block_height": 3816,
+    "block_hash": "bd5ac72815fbc6974c454f46cffe99f059137f38bfc569fb6d2493e3b0c96515",
+    "spaces_root": "cd3f1b4017aa2bbb535e00f76d94d1fa521b435168c126300192092d69c42329",
+    "nums_root": "a7662ec0ddf9185bf5c64e9165ce9c1e7dab182b356458389a2b96e39a84adca",
+    "anchor_hash": "7694d571c5a1365ea3496d9ef37187f121d201f218ffa4cafaccfd83b75977b3"
+  },
+  "zones": [
+    {
+      "handle": "@test10000",
+      "kind": "space",
+      "sovereignty": "sovereign",
+      "receipt": {
+        "kind": "step",
+        "initial_root": "409fb24191d23d15c47e4fac03eb810b056aae7d605ef3ae73747b128246b81c",
+        "final_root": "1abad607907e44010791165a65da9766e8546f4374a123ec8fc6b43b1219ed71",
+        "rolling_hash": "c0b15da66ab5f2efdc6f0740252070d3632dac0c650354d74467d0f34ef73d29",
+        "policy_ok": true
+      },
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "cd3f1b4017aa2bbb535e00f76d94d1fa521b435168c126300192092d69c42329",
+          "key": "45cb0eee0f4238f581ac6e973b26306a6aaa643d822cd74b10f25c6a9fab34ab",
+          "resolution": "included",
+          "leaf": {
+            "key": "45cb0eee0f4238f581ac6e973b26306a6aaa643d822cd74b10f25c6a9fab34ab",
+            "value_hash": "6220feaf54ba19cd6a919f72f775baf8041e045ae3bcd82ee03743879484a369",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "8ee1a0ec2109cd68374f3e03564512f2fae1262592028ac04dcb89fc1e26ea3e"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "b833b17d7de8a18acfe7a3b3f520c386e807ef88034c87c33133e938d0578c8f"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "26fa5fd0ffff3c2ddae9491381e1afa124ef4ad3b59e98aaf83fc14869a183c6"
+            },
+            {
+              "depth": 3,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "b69a7ada47afc8e4937634d407ae60129211a69333cd85ea13b9209a8c9c429c"
+            },
+            {
+              "depth": 4,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "cb59fec3943062eddb1f8a20ab8fd5676663e8e07555e74fd39a1c31f63e7682"
+            },
+            {
+              "depth": 5,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "2bc0cae1765c22bbef4a0ff157e32aa16ae4131c9f0e4b9e3fe7ba7e55281168"
+            },
+            {
+              "depth": 6,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "93780149d6c6f2b8e504e506b71646f6dab44554c821d05679f2fe8d26433ae6"
+            },
+            {
+              "depth": 7,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "89cc2f1f2d16065c3308e24d7eb5402b71d806825afd8ff61c0b8d579973781b"
+            },
+            {
+              "depth": 8,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "3fb4475e174f97552945926b731478cdd695adf4198c5e0c4e7f06d828b810e0"
+            },
+            {
+              "depth": 9,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a205ac38f4c710274e4196fba32d548a11b7d848a8a421b39d1dddb623d4a188"
+            },
+            {
+              "depth": 10,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "2de42d527ab138688f1f268f0e8ee3577b6ddfae2214ef46a40733dd40f2def6"
+            },
+            {
+              "depth": 11,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "a460a3bcb11152e29c577ef2d3989f898816e74c55fde1dd56eb53d988a95a71"
+            },
+            {
+              "depth": 12,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "1ae5b13f3e73b183c248afd85b519de53ad399df5a9ea3f71d0aadb199e56aff"
+            },
+            {
+              "depth": 13,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "2e0c0774f3483ccc595aeaa4f4699a833897a64f2332020fe4acfc9538c9ba78"
+            },
+            {
+              "depth": 14,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "77c42406089df190ccb4688c4c60114b7b79a23d7fde309475ecf88cb4dad628"
+            },
+            {
+              "depth": 15,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "242decab9469c754a61b0efe4016ad230958903b0d721d1918eed5bf35447a94"
+            },
+            {
+              "depth": 16,
+              "prefix_bit_len": 3,
+              "prefix": "00",
+              "direction": "left",
+              "sibling_hash": "0ce2f28f8e2d1792f49fa598677de73b292a50bd35bc2ca9f25cf2aa82ef62b1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment_tip",
+          "root": "a7662ec0ddf9185bf5c64e9165ce9c1e7dab182b356458389a2b96e39a84adca",
+          "key": "45d6db92b9a85bbaf95bb548d6068c8cb6a5379a0069b1174cf970c12fe925dc",
+          "resolution": "included",
+          "leaf": {
+            "key": "45d6db92b9a85bbaf95bb548d6068c8cb6a5379a0069b1174cf970c12fe925dc",
+            "value_hash": "10880263eddef8da93c84569e26da90b5f8e7be60fa5edb014da84c2eb8d1149",
+            "value_kind": "CommitmentTip",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "21d4010d7836d4cacbc54a8bcb2df0f2d4b1275e2a68f8be1ba8be702c5b8795"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a3355044b2a82cdd1b0f302f06b03336fa2dd84592be55e2f52d107dbbebf752"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6262fa37e2e2aaae9809d82462466183329bdbbd8d777f0674e19e06b33a7458"
+            },
+            {
+              "depth": 3,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "66ec417a67c241535a33c7aaa65b7941950ad5991ce92c858eca978802d3182b"
+            },
+            {
+              "depth": 4,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "70e967b6d4db8e78ad2f6cd4e5070fc6812691bd3ad56d9745fdc3f7903fded9"
+            },
+            {
+              "depth": 5,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "95673d1018264acdbb3ea4915c89a5df1926c797168a0d93fe210831318ff682"
+            },
+            {
+              "depth": 6,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "44ab3ea8c63cf043d54865302d461f9f5b86644cee0758a4bb3061bd2c6c5135"
+            },
+            {
+              "depth": 7,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a8d264a1e1decc462c8ca1b46197a95c6d3a1b76f8cff0ddf34d2c9df66f45c2"
+            },
+            {
+              "depth": 8,
+              "prefix_bit_len": 1,
+              "prefix": "80",
+              "direction": "right",
+              "sibling_hash": "b9d78065fa6636bd481333c0402e61f9aa0e98ba47b6921a832fec5236f7b92a"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "a7662ec0ddf9185bf5c64e9165ce9c1e7dab182b356458389a2b96e39a84adca",
+          "key": "2a9c70c0de955dac4e825d1ec6b63d5db25fc494e1650b4e158a60adc7c44fca",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 3593,
+            "state_root": "1abad607907e44010791165a65da9766e8546f4374a123ec8fc6b43b1219ed71",
+            "prev_root": "409fb24191d23d15c47e4fac03eb810b056aae7d605ef3ae73747b128246b81c",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "2a9c70c0de955dac4e825d1ec6b63d5db25fc494e1650b4e158a60adc7c44fca",
+            "value_hash": "2167ced4c16fade71e60ae11abd3f761d79db186f62ef17b06f85f7b1c086b0e",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "21d4010d7836d4cacbc54a8bcb2df0f2d4b1275e2a68f8be1ba8be702c5b8795"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "ba5432258f2c2935669f6ecf3bea9c049c044f5c57e9306079c427897ff7c16f"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a9e6853a69bfabe18207341ba93e3d480ad11528adfcc963a4a39eb7df3e2d9d"
+            },
+            {
+              "depth": 3,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6d302bd0d21eb61de906cbbadff847b64cb3058a56f9dfa8be2096767f910328"
+            },
+            {
+              "depth": 4,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "99570cacdb3d1903e5788abf66d0b42f4a5dca4eb8843ae9d321308c61f6ff0f"
+            },
+            {
+              "depth": 5,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6b387c58c1e1498cbbff2f4613ed027163e65baaf4327d15096079373d9ee85d"
+            },
+            {
+              "depth": 6,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a896445072189cc6f10e4ae31a729fae86e913be038d5329bef14d1dc89b4182"
+            },
+            {
+              "depth": 7,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6e62f2ac3fd3327de8acbb0efb92a4b6a414e4750c68a6c7a2b16db17469d524"
+            },
+            {
+              "depth": 8,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "fa9fd131ff6efafbf0689d9ddd44dd3eec61d4e6792f3add44bc0c502748be83"
+            },
+            {
+              "depth": 9,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "fad1ed5524ab6d2ae540830d706072bdc3351c0c907169ed828178a4e3a9ec46"
+            },
+            {
+              "depth": 10,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "7dcde14ec6cdb7176b1bf2ebc80ed3145c9398702cc8dcaa15ed56bb701d9e46"
+            },
+            {
+              "depth": 11,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "ccaecfaa34a2b39de0324307212872db4bea905b44e5cb3b1e8b89f79736bbc3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "handle": "sunny@test10000",
+      "kind": "handle",
+      "parent": "@test10000",
+      "sovereignty": "sovereign",
+      "paths": [
+        {
+          "tree": "spaces_root",
+          "purpose": "space_utxo",
+          "root": "cd3f1b4017aa2bbb535e00f76d94d1fa521b435168c126300192092d69c42329",
+          "key": "45cb0eee0f4238f581ac6e973b26306a6aaa643d822cd74b10f25c6a9fab34ab",
+          "resolution": "included",
+          "leaf": {
+            "key": "45cb0eee0f4238f581ac6e973b26306a6aaa643d822cd74b10f25c6a9fab34ab",
+            "value_hash": "6220feaf54ba19cd6a919f72f775baf8041e045ae3bcd82ee03743879484a369",
+            "value_kind": "SpaceOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "8ee1a0ec2109cd68374f3e03564512f2fae1262592028ac04dcb89fc1e26ea3e"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "b833b17d7de8a18acfe7a3b3f520c386e807ef88034c87c33133e938d0578c8f"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "26fa5fd0ffff3c2ddae9491381e1afa124ef4ad3b59e98aaf83fc14869a183c6"
+            },
+            {
+              "depth": 3,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "b69a7ada47afc8e4937634d407ae60129211a69333cd85ea13b9209a8c9c429c"
+            },
+            {
+              "depth": 4,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "cb59fec3943062eddb1f8a20ab8fd5676663e8e07555e74fd39a1c31f63e7682"
+            },
+            {
+              "depth": 5,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "2bc0cae1765c22bbef4a0ff157e32aa16ae4131c9f0e4b9e3fe7ba7e55281168"
+            },
+            {
+              "depth": 6,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "93780149d6c6f2b8e504e506b71646f6dab44554c821d05679f2fe8d26433ae6"
+            },
+            {
+              "depth": 7,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "89cc2f1f2d16065c3308e24d7eb5402b71d806825afd8ff61c0b8d579973781b"
+            },
+            {
+              "depth": 8,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "3fb4475e174f97552945926b731478cdd695adf4198c5e0c4e7f06d828b810e0"
+            },
+            {
+              "depth": 9,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a205ac38f4c710274e4196fba32d548a11b7d848a8a421b39d1dddb623d4a188"
+            },
+            {
+              "depth": 10,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "2de42d527ab138688f1f268f0e8ee3577b6ddfae2214ef46a40733dd40f2def6"
+            },
+            {
+              "depth": 11,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "a460a3bcb11152e29c577ef2d3989f898816e74c55fde1dd56eb53d988a95a71"
+            },
+            {
+              "depth": 12,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "1ae5b13f3e73b183c248afd85b519de53ad399df5a9ea3f71d0aadb199e56aff"
+            },
+            {
+              "depth": 13,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "2e0c0774f3483ccc595aeaa4f4699a833897a64f2332020fe4acfc9538c9ba78"
+            },
+            {
+              "depth": 14,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "77c42406089df190ccb4688c4c60114b7b79a23d7fde309475ecf88cb4dad628"
+            },
+            {
+              "depth": 15,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "242decab9469c754a61b0efe4016ad230958903b0d721d1918eed5bf35447a94"
+            },
+            {
+              "depth": 16,
+              "prefix_bit_len": 3,
+              "prefix": "00",
+              "direction": "left",
+              "sibling_hash": "0ce2f28f8e2d1792f49fa598677de73b292a50bd35bc2ca9f25cf2aa82ef62b1"
+            }
+          ]
+        },
+        {
+          "tree": "nums_root",
+          "purpose": "commitment",
+          "root": "a7662ec0ddf9185bf5c64e9165ce9c1e7dab182b356458389a2b96e39a84adca",
+          "key": "2a9c70c0de955dac4e825d1ec6b63d5db25fc494e1650b4e158a60adc7c44fca",
+          "resolution": "included",
+          "provides_root": "handles_root",
+          "commitment": {
+            "block_height": 3593,
+            "state_root": "1abad607907e44010791165a65da9766e8546f4374a123ec8fc6b43b1219ed71",
+            "prev_root": "409fb24191d23d15c47e4fac03eb810b056aae7d605ef3ae73747b128246b81c",
+            "genesis": false,
+            "directly_proven": true
+          },
+          "leaf": {
+            "key": "2a9c70c0de955dac4e825d1ec6b63d5db25fc494e1650b4e158a60adc7c44fca",
+            "value_hash": "2167ced4c16fade71e60ae11abd3f761d79db186f62ef17b06f85f7b1c086b0e",
+            "value_kind": "Commitment",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "21d4010d7836d4cacbc54a8bcb2df0f2d4b1275e2a68f8be1ba8be702c5b8795"
+            },
+            {
+              "depth": 1,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "ba5432258f2c2935669f6ecf3bea9c049c044f5c57e9306079c427897ff7c16f"
+            },
+            {
+              "depth": 2,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a9e6853a69bfabe18207341ba93e3d480ad11528adfcc963a4a39eb7df3e2d9d"
+            },
+            {
+              "depth": 3,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6d302bd0d21eb61de906cbbadff847b64cb3058a56f9dfa8be2096767f910328"
+            },
+            {
+              "depth": 4,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "99570cacdb3d1903e5788abf66d0b42f4a5dca4eb8843ae9d321308c61f6ff0f"
+            },
+            {
+              "depth": 5,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6b387c58c1e1498cbbff2f4613ed027163e65baaf4327d15096079373d9ee85d"
+            },
+            {
+              "depth": 6,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "a896445072189cc6f10e4ae31a729fae86e913be038d5329bef14d1dc89b4182"
+            },
+            {
+              "depth": 7,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "6e62f2ac3fd3327de8acbb0efb92a4b6a414e4750c68a6c7a2b16db17469d524"
+            },
+            {
+              "depth": 8,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "fa9fd131ff6efafbf0689d9ddd44dd3eec61d4e6792f3add44bc0c502748be83"
+            },
+            {
+              "depth": 9,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "fad1ed5524ab6d2ae540830d706072bdc3351c0c907169ed828178a4e3a9ec46"
+            },
+            {
+              "depth": 10,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "left",
+              "sibling_hash": "7dcde14ec6cdb7176b1bf2ebc80ed3145c9398702cc8dcaa15ed56bb701d9e46"
+            },
+            {
+              "depth": 11,
+              "prefix_bit_len": 0,
+              "prefix": "",
+              "direction": "right",
+              "sibling_hash": "ccaecfaa34a2b39de0324307212872db4bea905b44e5cb3b1e8b89f79736bbc3"
+            }
+          ]
+        },
+        {
+          "tree": "handles_root",
+          "purpose": "handle_inclusion",
+          "root": "1abad607907e44010791165a65da9766e8546f4374a123ec8fc6b43b1219ed71",
+          "key": "4e8ab5e367518321a5755c0a469995102be5a230cc6061c9dc1fc5f5eb1fcee1",
+          "resolution": "included",
+          "leaf": {
+            "key": "4e8ab5e367518321a5755c0a469995102be5a230cc6061c9dc1fc5f5eb1fcee1",
+            "value_hash": "0d3a27b80c51d12a6865b4dee6f25ca38d3f7f5e5adcb58320d9167731902eef",
+            "value_kind": "HandleOut",
+            "matched": true
+          },
+          "steps": [
+            {
+              "depth": 0,
+              "prefix_bit_len": 1,
+              "prefix": "00",
+              "direction": "right",
+              "sibling_hash": "409fb24191d23d15c47e4fac03eb810b056aae7d605ef3ae73747b128246b81c"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

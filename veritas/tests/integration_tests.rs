@@ -1,27 +1,32 @@
-use bitcoin::hashes::{Hash as BitcoinHash};
+use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::key::Keypair;
 use bitcoin::key::rand::Rng;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::rand;
 use bitcoin::{BlockHash, OutPoint, ScriptBuf, Txid};
 use borsh::{BorshDeserialize, BorshSerialize};
-use libveritas::cert::{Certificate, HandleOut, HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree, Witness};
+use libveritas::cert::{
+    Certificate, HandleOut, HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree, Witness,
+};
+use libveritas::msg::{self, Message, QueryContext};
+use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
+use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
 use spacedb::Sha256Hasher;
 use spacedb::subtree::{ProofType, SubTree, ValueOrHash};
+use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
+use spaces_nums::num_id::NumId;
+use spaces_nums::snumeric::SNumeric;
+use spaces_nums::{
+    CommitmentKey, CommitmentTipKey, DelegatorKey, FullNumOut, Num, NumOut, NumOutpointKey,
+    RootAnchor, rolling_hash,
+};
+use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::hasher::{KeyHasher, OutpointKey, SpaceKey};
 use spaces_protocol::slabel::SLabel;
+use spaces_protocol::sname::{SName, Subname};
 use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
-use spaces_nums::num_id::NumId;
-use spaces_nums::{rolling_hash, CommitmentKey, FullNumOut, Num, NumOut, NumOutpointKey, CommitmentTipKey, RootAnchor, DelegatorKey};
-use spaces_nums::snumeric::SNumeric;
 use std::collections::HashMap;
 use std::str::FromStr;
-use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
-use spaces_protocol::constants::ChainAnchor;
-use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
-use libveritas::{hash_signable_message, ProvableOption, SovereigntyState, Veritas, Zone};
-use libveritas::msg::{self, Message, QueryContext};
-use spaces_protocol::sname::{Subname, SName};
 
 fn sname(s: &str) -> SName {
     SName::from_str(s).unwrap()
@@ -52,8 +57,8 @@ pub struct EncodableOutpoint(
 );
 
 fn gen_p2tr_spk() -> (ScriptBuf, Keypair) {
-    use bitcoin::script::Builder;
     use bitcoin::opcodes::all::OP_PUSHNUM_1;
+    use bitcoin::script::Builder;
 
     let secp = Secp256k1::new();
     let (secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
@@ -165,6 +170,7 @@ impl TestNum {
                 },
                 value: Default::default(),
                 script_pubkey,
+                spent: false,
             },
         };
 
@@ -172,7 +178,7 @@ impl TestNum {
     }
 
     pub fn id(&self) -> NumId {
-        self.fso.numout.num.id.clone()
+        self.fso.numout.num.id
     }
 
     pub fn outpoint_key(&self) -> NumOutpointKey {
@@ -211,10 +217,16 @@ pub struct StagedHandle {
 }
 
 pub struct TestCommitmentBundle {
-    root: [u8;32],
+    root: [u8; 32],
     handles: HashMap<Subname, TestHandle>,
     handle_tree: SubTree<Sha256Hasher>,
     receipt: Option<Receipt>,
+}
+
+impl Default for TestChain {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestChain {
@@ -259,8 +271,8 @@ impl TestChain {
         let spaces_root = self.spaces_tree.compute_root().expect("spaces root");
         let nums_root = self.nums_tree.compute_root().expect("nums root");
 
-        let block_hash = BlockHash
-        ::from_byte_array(rolling_hash::<KeyHash>(spaces_root, nums_root));
+        let block_hash =
+            BlockHash::from_byte_array(rolling_hash::<KeyHash>(spaces_root, nums_root));
 
         RootAnchor {
             spaces_root,
@@ -288,7 +300,7 @@ impl TestChain {
         self.nums_tree
             .insert(num.id().into(), ValueOrHash::Value(num.outpoint_bytes()))
             .expect("insert outpoint");
-        self.nums.insert(num.id().into(), num.clone());
+        self.nums.insert(num.id(), num.clone());
         num
     }
 
@@ -308,9 +320,12 @@ impl TestChain {
         TestDelegatedSpace { space, ptr: num }
     }
 
-    pub fn insert_commitment(&mut self, ds: &TestDelegatedSpace, root: [u8; 32]) -> spaces_nums::Commitment {
-        let prev_finalized = self
-            .rollback_to_finalized_commitment(&ds.space.label());
+    pub fn insert_commitment(
+        &mut self,
+        ds: &TestDelegatedSpace,
+        root: [u8; 32],
+    ) -> spaces_nums::Commitment {
+        let prev_finalized = self.rollback_to_finalized_commitment(&ds.space.label());
 
         let commitment = match prev_finalized {
             None => spaces_nums::Commitment {
@@ -324,17 +339,22 @@ impl TestChain {
                 prev_root: Some(prev.state_root),
                 rolling_hash: rolling_hash::<KeyHash>(prev.rolling_hash, root),
                 block_height: self.block_height,
-            }
+            },
         };
 
         let commitment_key = CommitmentKey::new::<KeyHash>(&ds.space.label(), root);
 
         let commitment_bytes = borsh::to_vec(&commitment).expect("valid");
 
-        self.nums_tree.insert(commitment_key.into(), ValueOrHash::Value(commitment_bytes))
+        self.nums_tree
+            .insert(commitment_key.into(), ValueOrHash::Value(commitment_bytes))
             .expect("insert commitment");
         let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(&ds.space.label());
-        self.nums_tree.update(registry_key.into(), ValueOrHash::Value(commitment.state_root.to_vec()))
+        self.nums_tree
+            .update(
+                registry_key.into(),
+                ValueOrHash::Value(commitment.state_root.to_vec()),
+            )
             .expect("insert registry");
 
         commitment
@@ -374,7 +394,10 @@ impl TestChain {
             })
     }
 
-    pub fn rollback_to_finalized_commitment(&mut self, space: &SLabel) -> Option<spaces_nums::Commitment> {
+    pub fn rollback_to_finalized_commitment(
+        &mut self,
+        space: &SLabel,
+    ) -> Option<spaces_nums::Commitment> {
         let commitment = self.get_commitment(space, None)?;
         if commitment.is_finalized(self.block_height) {
             return Some(commitment);
@@ -393,7 +416,11 @@ impl TestChain {
         let finalized = self.get_commitment(space, Some(prev_root))?;
 
         // update tip pointer
-        self.nums_tree.update(registry_key.into(), ValueOrHash::Value(finalized.state_root.to_vec()))
+        self.nums_tree
+            .update(
+                registry_key.into(),
+                ValueOrHash::Value(finalized.state_root.to_vec()),
+            )
             .expect("update");
 
         Some(finalized)
@@ -403,7 +430,7 @@ impl TestChain {
 pub struct TestHandle {
     pub name: Subname,
     pub genesis_spk: ScriptBuf,
-    pub keypair: Keypair
+    pub keypair: Keypair,
 }
 
 impl TestHandleTree {
@@ -421,7 +448,10 @@ impl TestHandleTree {
         let label = label(name);
         let label_hash = KeyHash::hash(label.as_slabel().as_ref());
         assert!(
-            !self.handle_tree.contains(&label_hash).expect("complete tree"),
+            !self
+                .handle_tree
+                .contains(&label_hash)
+                .expect("complete tree"),
             "already exists"
         );
         assert!(!self.staged.contains_key(&label), "already staged");
@@ -447,13 +477,11 @@ impl TestHandleTree {
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
             num_id,
+            anchor_hash: [0u8; 32],
         };
 
         let signature = sign_zone(&zone, &self.ds.ptr.keypair);
-        let staged = StagedHandle {
-            handle,
-            signature,
-        };
+        let staged = StagedHandle { handle, signature };
 
         self.staged.insert(staged.handle.name.clone(), staged);
     }
@@ -467,7 +495,7 @@ impl TestHandleTree {
             .map(|(k, v)| (k, v.handle))
             .collect();
 
-        for (_, handle) in handles.iter() {
+        for handle in handles.values() {
             let handle_key = KeyHash::hash(handle.name.as_slabel().as_ref());
             let handle_out = HandleOut {
                 name: handle.name.as_slabel().clone(),
@@ -491,16 +519,17 @@ impl TestHandleTree {
                 kind: libveritas_zk::guest::CommitmentKind::Fold,
             };
 
-
             // Serialize using risc0 serde format (u32 words → le bytes),
             // matching what a real guest would write via env::commit()
             let words = risc0_zkvm::serde::to_vec(&commitment).expect("serialize commitment");
             let journal_bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
 
-            let receipt_claim = ReceiptClaim::ok(libveritas::constants::FOLD_ID, journal_bytes.clone());
-            Some(
-                Receipt::new(InnerReceipt::Fake(FakeReceipt::new(receipt_claim)), journal_bytes)
-            )
+            let receipt_claim =
+                ReceiptClaim::ok(libveritas::constants::FOLD_ID, journal_bytes.clone());
+            Some(Receipt::new(
+                InnerReceipt::Fake(FakeReceipt::new(receipt_claim)),
+                journal_bytes,
+            ))
         } else {
             None
         };
@@ -535,10 +564,8 @@ impl TestHandleTree {
         ];
 
         // --- Nums tree keys ---
-        let mut nums_keys: Vec<[u8; 32]> = vec![
-            self.ds.ptr.outpoint_key().into(),
-            self.ds.ptr.id().into(),
-        ];
+        let mut nums_keys: Vec<[u8; 32]> =
+            vec![self.ds.ptr.outpoint_key().into(), self.ds.ptr.id().into()];
 
         // Registry key (commitment tip pointer)
         nums_keys.push(CommitmentTipKey::from_slabel::<KeyHash>(&self.space).into());
@@ -590,7 +617,7 @@ impl TestHandleTree {
         // --- Build message ---
         Message {
             chain: msg::ChainProof {
-                anchor: anchor.clone(),
+                anchor: *anchor,
                 spaces: SpacesSubtree(spaces_proof),
                 nums: NumsSubtree(nums_proof),
             },
@@ -619,7 +646,9 @@ impl TestHandleTree {
         anchor: &ChainAnchor,
     ) -> Message {
         let tcb = &self.commitments[commitment_idx];
-        let staged = self.staged.get(&label(handle_name))
+        let staged = self
+            .staged
+            .get(&label(handle_name))
             .expect("handle must be staged");
 
         // --- Spaces tree keys ---
@@ -629,10 +658,8 @@ impl TestHandleTree {
         ];
 
         // --- Nums tree keys ---
-        let mut nums_keys: Vec<[u8; 32]> = vec![
-            self.ds.ptr.outpoint_key().into(),
-            self.ds.ptr.id().into(),
-        ];
+        let mut nums_keys: Vec<[u8; 32]> =
+            vec![self.ds.ptr.outpoint_key().into(), self.ds.ptr.id().into()];
         nums_keys.push(CommitmentTipKey::from_slabel::<KeyHash>(&self.space).into());
         nums_keys.push(CommitmentKey::new::<KeyHash>(&self.space, tcb.root).into());
 
@@ -645,19 +672,22 @@ impl TestHandleTree {
         let handle_keys: Vec<[u8; 32]> = vec![handle_key];
 
         // --- Create proved subtrees ---
-        let spaces_proof = chain.spaces_tree
+        let spaces_proof = chain
+            .spaces_tree
             .prove(&spaces_keys, ProofType::Standard)
             .expect("prove spaces");
-        let nums_proof = chain.nums_tree
+        let nums_proof = chain
+            .nums_tree
             .prove(&nums_keys, ProofType::Standard)
             .expect("prove nums");
-        let handles_proof = tcb.handle_tree
+        let handles_proof = tcb
+            .handle_tree
             .prove(&handle_keys, ProofType::Standard)
             .expect("prove handles exclusion");
 
         Message {
             chain: msg::ChainProof {
-                anchor: anchor.clone(),
+                anchor: *anchor,
                 spaces: SpacesSubtree(spaces_proof),
                 nums: NumsSubtree(nums_proof),
             },
@@ -731,30 +761,31 @@ impl Fixture {
 
     fn veritas(&self) -> Veritas {
         let anchors = vec![self.latest_anchor.clone(), self.finalized_anchor.clone()];
-        Veritas::new()
-            .with_anchors(anchors).expect("valid anchors")
+        Veritas::new().with_anchors(anchors).expect("valid anchors")
     }
 
     /// Message proving commitment 0 (finalized) against the finalized anchor.
     fn finalized_message(&self, handles: &[&str]) -> Message {
         self.handles.build_message(
-            &self.finalized_chain, 0, handles,
+            &self.finalized_chain,
+            0,
+            handles,
             &self.finalized_anchor.block,
         )
     }
 
     /// Message proving commitment 1 (pending) against the latest anchor.
     fn pending_message(&self, handles: &[&str]) -> Message {
-        self.handles.build_message(
-            &self.latest_chain, 1, handles,
-            &self.latest_anchor.block,
-        )
+        self.handles
+            .build_message(&self.latest_chain, 1, handles, &self.latest_anchor.block)
     }
 
     /// Temporary certificate message for a staged handle (not yet committed).
     fn temporary_message(&self, handle_name: &str) -> Message {
         self.handles.build_temporary_message(
-            &self.latest_chain, 1, handle_name,
+            &self.latest_chain,
+            1,
+            handle_name,
             &self.latest_anchor.block,
         )
     }
@@ -766,7 +797,9 @@ fn verify_root_finalized() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&[]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(&ctx, f.finalized_message(&[]), libveritas::VERIFY_DEV_MODE)
+        .expect("verify");
 
     assert_eq!(result.zones.len(), 1);
     let zone = &result.zones[0];
@@ -786,15 +819,35 @@ fn verify_leaf_finalized() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["alice"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
 
     // Should have root zone + alice zone
     assert_eq!(result.zones.len(), 2);
-    let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
+    let alice = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("alice@bitcoin"))
+        .expect("alice");
     assert!(matches!(alice.sovereignty, SovereigntyState::Sovereign));
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["bob"]), libveritas::VERIFY_DEV_MODE).expect("verify");
-    let bob = result.zones.iter().find(|z| z.handle == sname("bob@bitcoin")).expect("bob");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["bob"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
+    let bob = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("bob@bitcoin"))
+        .expect("bob");
     assert!(matches!(bob.sovereignty, SovereigntyState::Sovereign));
 }
 
@@ -804,7 +857,9 @@ fn verify_root_pending() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.pending_message(&[]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(&ctx, f.pending_message(&[]), libveritas::VERIFY_DEV_MODE)
+        .expect("verify");
 
     assert_eq!(result.zones.len(), 1);
     let zone = &result.zones[0];
@@ -822,8 +877,18 @@ fn verify_leaf_pending() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.pending_message(&["charlie"]), libveritas::VERIFY_DEV_MODE).expect("verify");
-    let charlie = result.zones.iter().find(|z| z.handle == sname("charlie@bitcoin")).expect("charlie");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.pending_message(&["charlie"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
+    let charlie = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("charlie@bitcoin"))
+        .expect("charlie");
     assert!(matches!(charlie.sovereignty, SovereigntyState::Pending));
 }
 
@@ -834,8 +899,18 @@ fn verify_leaf_across_anchors() {
     let ctx = QueryContext::new();
 
     // alice was committed in commitment 0, verified against the latest anchor
-    let result = veritas.verify_with_options(&ctx,f.pending_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
-    let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.pending_message(&["alice"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
+    let alice = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("alice@bitcoin"))
+        .expect("alice");
     assert_eq!(alice.handle, sname("alice@bitcoin"));
 }
 
@@ -846,8 +921,18 @@ fn verify_leaf_temporary() {
     let ctx = QueryContext::new();
 
     // "staged" is in staged but not committed — uses delegate's signature
-    let result = veritas.verify_with_options(&ctx,f.temporary_message("staged"), libveritas::VERIFY_DEV_MODE).expect("verify");
-    let staged = result.zones.iter().find(|z| z.handle == sname("staged@bitcoin")).expect("staged");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.temporary_message("staged"),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
+    let staged = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("staged@bitcoin"))
+        .expect("staged");
     assert_eq!(staged.handle, sname("staged@bitcoin"));
     assert!(matches!(staged.sovereignty, SovereigntyState::Dependent));
 }
@@ -861,11 +946,19 @@ fn verify_with_request_filter() {
     let mut ctx = QueryContext::new();
     ctx.add_request(sname("alice@bitcoin"));
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice", "bob"]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["alice", "bob"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
 
-    // Should only return alice (root not requested, bob not requested)
-    assert_eq!(result.zones.len(), 1);
-    assert_eq!(result.zones[0].handle, sname("alice@bitcoin"));
+    // Returns alice plus the parent zone (needed to cache the verified
+    // receipt), but not bob.
+    assert_eq!(result.zones.len(), 2);
+    assert_eq!(result.zones[0].handle, sname("@bitcoin"));
+    assert_eq!(result.zones[1].handle, sname("alice@bitcoin"));
 }
 
 #[test]
@@ -875,15 +968,27 @@ fn verify_with_cached_parent_zone() {
 
     // First verify to get parent zone
     let ctx = QueryContext::new();
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&[]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(&ctx, f.finalized_message(&[]), libveritas::VERIFY_DEV_MODE)
+        .expect("verify");
     let parent_zone = result.zones[0].clone();
 
     // Now verify with cached parent
     let ctx = QueryContext::from_zones(vec![parent_zone]);
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["alice"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
 
     // Should succeed and include alice
-    let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
+    let alice = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("alice@bitcoin"))
+        .expect("alice");
     assert_eq!(alice.handle, sname("alice@bitcoin"));
 }
 
@@ -905,13 +1010,24 @@ fn verify_uses_better_cached_zone() {
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
         num_id: None,
+        anchor_hash: [0u8; 32],
     };
 
     let ctx = QueryContext::from_zones(vec![cached_zone.clone()]);
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["alice"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
 
     // Should return the newly verified zone (better anchor)
-    let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
+    let alice = result
+        .zones
+        .iter()
+        .find(|z| z.handle == sname("alice@bitcoin"))
+        .expect("alice");
     assert!(alice.anchor > 0);
     assert!(matches!(alice.sovereignty, SovereigntyState::Sovereign));
 }
@@ -923,7 +1039,13 @@ fn certificate_iterator() {
     let ctx = QueryContext::new();
 
     // Verify root + two leaves
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice", "bob"]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["alice", "bob"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
 
     let certs: Vec<Certificate> = result.certificates().collect();
 
@@ -935,15 +1057,21 @@ fn certificate_iterator() {
     assert!(matches!(certs[0].witness, Witness::Root { .. }));
 
     // Then leaves
-    let alice_cert = certs.iter().find(|c| c.subject == sname("alice@bitcoin")).expect("alice cert");
+    let alice_cert = certs
+        .iter()
+        .find(|c| c.subject == sname("alice@bitcoin"))
+        .expect("alice cert");
     assert!(matches!(alice_cert.witness, Witness::Leaf { .. }));
 
-    let bob_cert = certs.iter().find(|c| c.subject == sname("bob@bitcoin")).expect("bob cert");
+    let bob_cert = certs
+        .iter()
+        .find(|c| c.subject == sname("bob@bitcoin"))
+        .expect("bob cert");
     assert!(matches!(bob_cert.witness, Witness::Leaf { .. }));
 }
 
 #[test]
-fn certificate_iterator_leaves_only() {
+fn certificate_iterator_with_request_filter() {
     let f = Fixture::new();
     let veritas = f.veritas();
 
@@ -951,12 +1079,145 @@ fn certificate_iterator_leaves_only() {
     let mut ctx = QueryContext::new();
     ctx.add_request(sname("alice@bitcoin"));
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
+    let result = veritas
+        .verify_with_options(
+            &ctx,
+            f.finalized_message(&["alice"]),
+            libveritas::VERIFY_DEV_MODE,
+        )
+        .expect("verify");
 
     let certs: Vec<Certificate> = result.certificates().collect();
 
-    // Should have only alice (no root since it wasn't requested)
-    assert_eq!(certs.len(), 1);
-    assert_eq!(certs[0].subject, sname("alice@bitcoin"));
-    assert!(matches!(certs[0].witness, Witness::Leaf { .. }));
+    // The parent zone is included for receipt caching, so the root cert
+    // comes first, followed by alice.
+    assert_eq!(certs.len(), 2);
+    assert_eq!(certs[0].subject, sname("@bitcoin"));
+    assert!(matches!(certs[0].witness, Witness::Root { .. }));
+    assert_eq!(certs[1].subject, sname("alice@bitcoin"));
+    assert!(matches!(certs[1].witness, Witness::Leaf { .. }));
+}
+
+#[test]
+fn equal_commitment_heights_fall_through_to_freshness() {
+    let mut commitment = libveritas::CommitmentInfo::empty();
+    commitment.onchain.block_height = 100;
+
+    let make = |anchor: u32| Zone {
+        anchor,
+        sovereignty: SovereigntyState::Sovereign,
+        canonical: sname("alice@bitcoin"),
+        handle: sname("alice@bitcoin"),
+        alias: None,
+        script_pubkey: ScriptBuf::new(),
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::default(),
+        delegate: ProvableOption::Unknown,
+        commitment: ProvableOption::Exists {
+            value: commitment.clone(),
+        },
+        num_id: None,
+        anchor_hash: [0u8; 32],
+    };
+
+    // Equal commitment heights must fall through to the remaining
+    // comparisons instead of declaring both zones better than each other.
+    let older = make(5);
+    let newer = make(10);
+    assert!(!older.is_better_than(&newer).unwrap());
+    assert!(newer.is_better_than(&older).unwrap());
+
+    // A stripped (Unknown) commitment never beats a proven one,
+    // regardless of anchor.
+    let mut unknown = make(u32::MAX);
+    unknown.commitment = ProvableOption::Unknown;
+    assert!(!unknown.is_better_than(&newer).unwrap());
+    assert!(newer.is_better_than(&unknown).unwrap());
+}
+
+#[test]
+fn fresher_records_beat_higher_anchor() {
+    let mut commitment = libveritas::CommitmentInfo::empty();
+    commitment.onchain.block_height = 100;
+
+    let make = |anchor: u32, seq: u64| Zone {
+        anchor,
+        sovereignty: SovereigntyState::Sovereign,
+        canonical: sname("alice@bitcoin"),
+        handle: sname("alice@bitcoin"),
+        alias: None,
+        script_pubkey: ScriptBuf::new(),
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::new(sip7::Record::seq(seq).pack().expect("pack seq")),
+        delegate: ProvableOption::Unknown,
+        commitment: ProvableOption::Exists {
+            value: commitment.clone(),
+        },
+        num_id: None,
+        anchor_hash: [0u8; 32],
+    };
+
+    // Replayed zone: staler records (lower seq) but a higher anchor.
+    // The fresher records must win — anchor is only a tiebreaker.
+    let stale_high_anchor = make(100, 1);
+    let fresh_low_anchor = make(5, 2);
+    assert!(!stale_high_anchor.is_better_than(&fresh_low_anchor).unwrap());
+    assert!(fresh_low_anchor.is_better_than(&stale_high_anchor).unwrap());
+
+    // Identical records: anchor breaks the tie.
+    let a = make(100, 3);
+    let b = make(5, 3);
+    assert!(a.is_better_than(&b).unwrap());
+    assert!(!b.is_better_than(&a).unwrap());
+}
+
+#[test]
+fn temporary_cert_rejected_when_name_taken_by_other_key() {
+    let mut f = Fixture::new();
+    let veritas = f.veritas();
+
+    // "charlie" is committed in the tip tree under its own genesis key.
+    // Forge a temporary cert binding "charlie" to a different key, with a
+    // valid delegate signature — the exclusion proof must still reject it.
+    let (attacker_spk, attacker_keypair) = gen_p2tr_spk();
+    let subject = sname("charlie@bitcoin");
+    let zone = Zone {
+        anchor: 0,
+        sovereignty: SovereigntyState::Dependent,
+        canonical: subject.clone(),
+        handle: subject,
+        alias: None,
+        script_pubkey: attacker_spk.clone(),
+        fallback_records: sip7::RecordSet::default(),
+        records: sip7::RecordSet::default(),
+        delegate: ProvableOption::Unknown,
+        commitment: ProvableOption::Unknown,
+        num_id: Some(NumId::from_spk::<KeyHash>(attacker_spk.clone())),
+        anchor_hash: [0u8; 32],
+    };
+    let signature = sign_zone(&zone, &f.handles.ds.ptr.keypair);
+    f.handles.staged.insert(
+        label("charlie"),
+        StagedHandle {
+            handle: TestHandle {
+                name: label("charlie"),
+                genesis_spk: attacker_spk,
+                keypair: attacker_keypair,
+            },
+            signature,
+        },
+    );
+
+    let err = match veritas.verify_with_options(
+        &QueryContext::new(),
+        f.temporary_message("charlie"),
+        libveritas::VERIFY_DEV_MODE,
+    ) {
+        Ok(_) => panic!("temporary cert for a taken name must be rejected"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(err, libveritas::MessageError::HandleAlreadyExists { .. }),
+        "expected HandleAlreadyExists, got: {err}"
+    );
 }

@@ -3,7 +3,7 @@ name: Publish npm (WASM)
 on:
   push:
     tags:
-      - "v*"
+      - "libveritas-v*"
   workflow_dispatch:
 
 permissions:
@@ -33,14 +33,23 @@ jobs:
           wasm-pack build bindings/wasm/ \
             --target web \
             --out-dir ../../pkg \
-            --out-name libveritas
+            --out-name libveritas \
+            -- \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip=true'
+
+      - name: Report WASM size
+        run: ls -lh pkg/libveritas_bg.wasm
 
       - name: Add Node.js wrapper
         run: cp bindings/wasm/node.js pkg/node.js
 
       - name: Set package version from tag
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${GITHUB_REF_NAME#libveritas-v}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi

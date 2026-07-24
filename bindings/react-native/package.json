@@ -1,6 +1,6 @@
 {
-  "name": "@spacesprotocol/react-native-libveritas",
-  "version": "0.1.0",
+  "name": "@spacesops/react-native-libveritas",
+  "version": "0.3.0",
   "description": "React Native bindings for libveritas - stateless verification for Bitcoin handles",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -13,32 +13,37 @@
     "cpp",
     "ios",
     "android",
+    "SpacesopsReactNativeLibveritasFramework.xcframework",
     "*.podspec",
+    "*.xcframework",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",
-    "!**/node_modules"
+    "!**/node_modules",
+    "!**/.DS_Store"
   ],
   "scripts": {
     "ubrn:ios": "ubrn build ios --and-generate",
     "ubrn:android": "ubrn build android --and-generate",
     "ubrn:clean": "ubrn clean",
+    "build:binaries": "yarn ubrn:ios --release && yarn ubrn:android --release",
     "prepare": "bob build",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/spacesprotocol/libveritas.git",
+    "url": "git+https://github.com/spacesops/libveritas.git",
     "directory": "bindings/react-native"
   },
-  "author": "spacesprotocol",
+  "author": "spacesops",
   "license": "MIT",
-  "homepage": "https://github.com/spacesprotocol/libveritas#readme",
+  "homepage": "https://github.com/spacesops/libveritas#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
   "devDependencies": {
+    "react-native": "^0.74.0",
     "react-native-builder-bob": "^0.30.0",
     "typescript": "^5.0.0",
     "uniffi-bindgen-react-native": "^0.29.3-1"

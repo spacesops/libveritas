@@ -1,15 +1,15 @@
+use crate::cert::{Certificate, HandleSubtree, NumsSubtree, Signature, SpacesSubtree, Witness};
+use crate::{MessageError, Zone};
 use borsh::{BorshDeserialize, BorshSerialize};
 use risc0_zkvm::Receipt;
 use serde::{Deserialize, Serialize};
+use sip7::{Record, RecordSet};
 use spaces_protocol::bitcoin::{ScriptBuf, secp256k1};
 use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::slabel::SLabel;
+use spaces_protocol::sname::{NameLike, SName, Subname};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use sip7::{Record, RecordSet};
-use crate::{MessageError, Zone};
-use crate::cert::{Certificate, HandleSubtree, NumsSubtree, Signature, SpacesSubtree, Witness};
-use spaces_protocol::sname::{Subname, NameLike, SName};
 
 /// Context for a verification query.
 ///
@@ -20,6 +20,12 @@ pub struct QueryContext {
     pub requests: Vec<SName>,
     /// Known zones - parents, leaves, any zones the caller has.
     pub zones: Vec<Zone>,
+}
+
+impl Default for QueryContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QueryContext {
@@ -48,7 +54,11 @@ impl QueryContext {
 
     /// Add a zone to the context. Replaces if handle already exists.
     pub fn add_zone(&mut self, zone: Zone) {
-        if let Some(existing) = self.zones.iter_mut().find(|z| z.canonical == zone.canonical) {
+        if let Some(existing) = self
+            .zones
+            .iter_mut()
+            .find(|z| z.canonical == zone.canonical)
+        {
             *existing = zone;
         } else {
             self.zones.push(zone);
@@ -107,13 +117,14 @@ impl Message {
     fn set_records_inner(&mut self, canonical: &SName, data: sip7::RecordSet, delegate: bool) {
         let (space, subspace) = match canonical.label_count() {
             1 => (canonical.space().unwrap(), None),
-            2 => (canonical.space().unwrap(), Some(canonical.subspace().unwrap())),
+            2 => (
+                canonical.space().unwrap(),
+                Some(canonical.subspace().unwrap()),
+            ),
             _ => return,
         };
 
-        let Some(bundle) = self.spaces
-            .iter_mut()
-            .find(|b| b.subject == space) else {
+        let Some(bundle) = self.spaces.iter_mut().find(|b| b.subject == space) else {
             return;
         };
 
@@ -121,7 +132,7 @@ impl Message {
             None => match delegate {
                 true => bundle.delegate_records = Some(data),
                 false => bundle.records = Some(data),
-            }
+            },
             Some(name) => {
                 if let Some(handle) = bundle
                     .epochs
@@ -175,14 +186,21 @@ impl Message {
             let root = leaf.subject.space().unwrap();
             let (genesis_spk, handles, signature) = match leaf.witness {
                 Witness::Root { .. } => continue,
-                Witness::Leaf { genesis_spk, handles, signature } =>
-                (genesis_spk, handles, signature),
+                Witness::Leaf {
+                    genesis_spk,
+                    handles,
+                    signature,
+                } => (genesis_spk, handles, signature),
             };
             let Some(bundle) = bundles.get_mut(&root) else {
                 continue;
             };
             let epoch_root = handles.compute_root().expect("todo bubble error");
-            match bundle.epochs.iter_mut().find(|e| e.tree.compute_root().unwrap() == epoch_root) {
+            match bundle
+                .epochs
+                .iter_mut()
+                .find(|e| e.tree.compute_root().unwrap() == epoch_root)
+            {
                 Some(e) => {
                     let subtree = std::mem::replace(&mut e.tree, HandleSubtree::empty());
                     e.tree = subtree.merge(handles).expect("todo bubble error");
@@ -195,17 +213,14 @@ impl Message {
                 }
                 None => bundle.epochs.push(Epoch {
                     tree: handles,
-                    handles: vec![
-                        Handle {
-                            name: leaf.subject.subspace().unwrap(),
-                            genesis_spk,
-                            records: None,
-                            signature,
-                        }
-                    ],
-                })
+                    handles: vec![Handle {
+                        name: leaf.subject.subspace().unwrap(),
+                        genesis_spk,
+                        records: None,
+                        signature,
+                    }],
+                }),
             };
-
         }
         msg.spaces = bundles.into_values().collect();
         Ok(msg)
@@ -228,7 +243,10 @@ pub struct ChainProof {
 pub struct Bundle {
     /// Space subject (e.g., `@bitcoin`, `#222-2-2`).
     pub subject: SLabel,
-    /// ZK receipt for the tip epoch (None if finalized or first commitment).
+    /// ZK receipt for the tip epoch. May be None only for a first commitment
+    /// (no prior state to prove a transition from) or when the verifier's
+    /// context already holds a zone whose receipt was verified for this or a
+    /// newer commitment. On-chain finality does NOT remove the need for it.
     pub receipt: Option<Receipt>,
     /// Owner-signed records (RecordSet with embedded Sig record).
     pub records: Option<sip7::RecordSet>,
@@ -287,7 +305,9 @@ pub fn verify_records(
     expected_canonical: &SName,
 ) -> Result<(), crate::SignatureError> {
     let signable = records.signable();
-    let sig_data = signable.sig.ok_or_else(|| crate::SignatureError::InvalidSignature)?;
+    let sig_data = signable
+        .sig
+        .ok_or(crate::SignatureError::InvalidSignature)?;
 
     use secp256k1::XOnlyPublicKey;
 
@@ -295,22 +315,18 @@ pub fn verify_records(
         return Err(crate::SignatureError::SignerMismatch);
     }
 
-    let script_bytes = script_pubkey.as_bytes();
-    if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
+    if !script_pubkey.is_p2tr() {
         return Err(crate::SignatureError::InvalidPublicKey);
     }
-    let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
+    let pubkey = XOnlyPublicKey::from_slice(&script_pubkey.as_bytes()[2..])
         .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
     let msg = crate::hash_signable_message(signable.bytes);
     let sig = secp256k1::schnorr::Signature::from_slice(&sig_data.sig)
         .map_err(|_| crate::SignatureError::InvalidSignature)?;
-    secp256k1::Secp256k1::verification_only()
+    crate::secp256k1_verify_ctx()
         .verify_schnorr(&sig, &msg, &pubkey)
         .map_err(|_| crate::SignatureError::VerificationFailed)
 }
-
-
-
 
 /// An unsigned record set pending signature.
 pub struct UnsignedRecordSet {
@@ -338,7 +354,9 @@ impl UnsignedRecordSet {
             self.handle.clone(),
             vec![0u8; 64],
             self.flags,
-        ).pack().expect("valid sig");
+        )
+        .pack()
+        .expect("valid sig");
         buf.extend(&dummy);
         let full = RecordSet::new(buf);
         full.signable().bytes.to_vec()
@@ -358,7 +376,9 @@ impl UnsignedRecordSet {
             self.handle.clone(),
             signature,
             self.flags,
-        ).pack().expect("valid sig");
+        )
+        .pack()
+        .expect("valid sig");
         buf.extend(r);
         RecordSet::new(buf)
     }
@@ -403,7 +423,11 @@ impl BorshDeserialize for ChainProof {
         let anchor = ChainAnchor::deserialize_reader(reader)?;
         let spaces = SpacesSubtree::deserialize_reader(reader)?;
         let nums = NumsSubtree::deserialize_reader(reader)?;
-        Ok(ChainProof { anchor, spaces, nums })
+        Ok(ChainProof {
+            anchor,
+            spaces,
+            nums,
+        })
     }
 }
 
@@ -414,7 +438,10 @@ impl BorshSerialize for Bundle {
         BorshSerialize::serialize(&self.epochs, writer)?;
         let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
         BorshSerialize::serialize(&records_bytes, writer)?;
-        let delegate_bytes: Option<Vec<u8>> = self.delegate_records.as_ref().map(|d| d.as_slice().to_vec());
+        let delegate_bytes: Option<Vec<u8>> = self
+            .delegate_records
+            .as_ref()
+            .map(|d| d.as_slice().to_vec());
         BorshSerialize::serialize(&delegate_bytes, writer)
     }
 }

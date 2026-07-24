@@ -1,13 +1,20 @@
 [package]
 name = "libveritas-wasm"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+# Expose inspectProof(). Off by default; enable for visualizer builds:
+#   wasm-pack build --target web -- --features inspect
+inspect = ["libveritas/inspect"]
+
 [dependencies]
-libveritas = { path = "../../veritas" }
+libveritas = { workspace = true }
 sip7 = { workspace = true }
 serde = { version = "1.0" }
 serde_json = "1.0"
@@ -17,3 +24,7 @@ spaces_nums = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[package.metadata.wasm-pack.profile.release]
+# Pass --enable-bulk-memory so newer rustc output validates, and -Oz for size.
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-mutable-globals", "--enable-sign-ext", "--enable-nontrapping-float-to-int"]

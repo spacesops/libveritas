@@ -1,7 +1,11 @@
 [package]
 name = "libveritas_methods"
-version = "0.1.2"
-edition = "2021"
+# Pinned independently of the workspace. Bumping this implies the guest ELF /
+# image ID changed (a consensus contract). DO NOT inherit anything from the
+# workspace, or release-plz will touch this crate on every workspace release.
+version = "0.1.1"
+edition = "2021"   # risc0 build environment is on 2021
+publish = false
 
 [build-dependencies]
 risc0-build = { version = "3.0.5" }

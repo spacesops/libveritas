@@ -1,6 +1,6 @@
 {
   "name": "@spacesops/react-native-libveritas",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React Native bindings for libveritas - stateless verification for Bitcoin handles",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",

@@ -8,6 +8,11 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+# Expose inspectProof(). Off by default; enable for visualizer builds:
+#   wasm-pack build --target web -- --features inspect
+inspect = ["libveritas/inspect"]
+
 [dependencies]
 libveritas = { workspace = true }
 sip7 = { workspace = true }

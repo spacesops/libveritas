@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>libveritas · Trust Ledger</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Spline+Sans+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: oklch(0.145 0.011 70);
+        min-height: 100vh;
+        font-family: 'Archivo', system-ui, sans-serif;
+      }
+      .demo-hero {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 24px 0;
+      }
+      .demo-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: oklch(0.63 0.12 62);
+        margin: 0 0 10px;
+      }
+      .demo-title {
+        font-size: clamp(26px, 4vw, 38px);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.04;
+        color: oklch(0.95 0.01 70);
+        margin: 0 0 12px;
+        max-width: 20ch;
+      }
+      .demo-title em {
+        font-style: normal;
+        color: oklch(0.77 0.15 62);
+        font-family: 'Spline Sans Mono', monospace;
+        font-weight: 500;
+        letter-spacing: -0.03em;
+      }
+      .demo-subtitle {
+        font-size: 14.5px;
+        line-height: 1.6;
+        color: oklch(0.72 0.015 70);
+        margin: 0;
+        max-width: 62ch;
+      }
+      .demo-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 22px;
+        flex-wrap: wrap;
+      }
+      .demo-seg {
+        display: inline-flex;
+        border: 1px solid oklch(0.32 0.014 70);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .demo-seg button {
+        font-family: 'Spline Sans Mono', monospace;
+        font-size: 12px;
+        padding: 7px 14px;
+        background: oklch(0.205 0.013 70);
+        border: none;
+        color: oklch(0.72 0.015 70);
+        cursor: pointer;
+        transition: all 0.14s ease;
+      }
+      .demo-seg button + button {
+        border-left: 1px solid oklch(0.32 0.014 70);
+      }
+      .demo-seg button.active {
+        background: oklch(0.28 0.03 62);
+        color: oklch(0.9 0.05 62);
+      }
+      .demo-btn {
+        font-family: 'Spline Sans Mono', monospace;
+        font-size: 12px;
+        padding: 7px 14px;
+        background: none;
+        border: 1px solid oklch(0.32 0.014 70);
+        border-radius: 8px;
+        color: oklch(0.72 0.015 70);
+        cursor: pointer;
+        transition: all 0.14s ease;
+      }
+      .demo-btn:hover {
+        border-color: oklch(0.5 0.08 62);
+        color: oklch(0.9 0.02 70);
+      }
+      .demo-status {
+        margin-left: auto;
+        font-family: 'Spline Sans Mono', monospace;
+        font-size: 11px;
+        color: oklch(0.5 0.014 70);
+      }
+    </style>
+  </head>
+  <body class="libveritas-inspector">
+    <header class="demo-hero">
+      <p class="demo-eyebrow">libveritas · inspect</p>
+      <h1 class="demo-title">
+        The trust ledger behind <em>a Spaces handle</em>
+      </h1>
+      <p class="demo-subtitle">
+        Every ownership claim in a verified message is a chain of merkle proofs
+        rooted at a Bitcoin block. This reads that chain out link by link — each
+        with its verdict (included, provably excluded, or incomplete), the ZK
+        receipt, and the signed records. Structural only; the verifier is
+        authoritative.
+      </p>
+      <div class="demo-controls">
+        <div class="demo-seg" id="samples">
+          <button data-src="./sample-kitchen.json" class="active">
+            kitchen-sink
+          </button>
+          <button data-src="./sample-inspect.json">real STARK</button>
+        </div>
+        <button class="demo-btn" id="loadFile">load file…</button>
+        <input type="file" id="fileInput" accept="application/json" style="display: none" />
+        <span class="demo-status" id="status">loading…</span>
+      </div>
+    </header>
+
+    <main id="root"></main>
+
+    <script type="module">
+      import { renderInspectReport } from './visualizer.js';
+
+      const root = document.getElementById('root');
+      const status = document.getElementById('status');
+
+      async function loadSrc(src, btn) {
+        status.textContent = 'loading…';
+        try {
+          const report = await fetch(src).then((r) => r.json());
+          renderInspectReport(root, report);
+          const handles = report.zones.length;
+          status.textContent = `${handles} zone${handles === 1 ? '' : 's'} · anchor #${report.anchor.block_height}`;
+          if (btn) {
+            for (const b of document.querySelectorAll('#samples button'))
+              b.classList.toggle('active', b === btn);
+          }
+        } catch (e) {
+          status.textContent = `error: ${e.message}`;
+        }
+      }
+
+      document.querySelectorAll('#samples button').forEach((btn) => {
+        btn.addEventListener('click', () => loadSrc(btn.dataset.src, btn));
+      });
+
+      document.getElementById('loadFile').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+      });
+      document.getElementById('fileInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const report = JSON.parse(ev.target.result);
+            renderInspectReport(root, report);
+            status.textContent = `${file.name} · ${report.zones.length} zones`;
+            for (const b of document.querySelectorAll('#samples button'))
+              b.classList.remove('active');
+          } catch (err) {
+            status.textContent = `parse error: ${err.message}`;
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // default: the rich kitchen-sink sample
+      loadSrc('./sample-kitchen.json', document.querySelector('#samples button'));
+    </script>
+  </body>
+</html>

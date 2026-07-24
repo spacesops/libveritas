@@ -1,4 +1,6 @@
 use libveritas::cert::{NumsSubtree, SpacesSubtree};
+#[cfg(feature = "inspect")]
+use libveritas::inspect::{ProofPurpose, TreeKind, inspect};
 use libveritas::msg::QueryContext;
 use libveritas::{ProvableOption, SovereigntyState};
 use libveritas_testutil::fixture::{ChainState, FixtureRunner, kitchen_sink};
@@ -126,4 +128,122 @@ fn test_kitchen_sink() {
 
         assert_eq!(expected, zone.sovereignty);
     }
+}
+
+#[cfg(feature = "inspect")]
+#[test]
+fn test_inspect_proof_shape() {
+    let mut state = ChainState::new();
+    let fixture = kitchen_sink();
+    let mut runner = FixtureRunner::new(&mut state, fixture);
+    runner.run(&mut state);
+
+    let bundle = runner.build_bundle();
+    let msg = state.message(vec![bundle]);
+    let veritas = state.veritas();
+
+    let report = inspect(&veritas, &msg).expect("inspect");
+
+    assert_eq!(report.anchor.block_height, msg.chain.anchor.height);
+    assert!(!report.zones.is_empty(), "expected zones");
+
+    // First zone must be the parent space.
+    let parent = &report.zones[0];
+    assert!(parent.parent.is_none());
+    assert!(parent.handle.starts_with('@'));
+    let parent_path_count = parent.paths.len();
+    assert!(parent_path_count > 0, "parent should have paths");
+
+    // Parent must have a spaces_root path.
+    assert!(
+        parent
+            .paths
+            .iter()
+            .any(|p| matches!(p.tree, TreeKind::SpacesRoot)
+                && matches!(p.purpose, ProofPurpose::SpaceUtxo))
+    );
+
+    // Parent zone carries its own tip commitment.
+    assert!(
+        parent
+            .paths
+            .iter()
+            .any(|p| matches!(p.purpose, ProofPurpose::Commitment)),
+        "parent should have a tip commitment path"
+    );
+
+    // At least one handle zone.
+    let handle_zones: Vec<_> = report.zones.iter().filter(|z| z.parent.is_some()).collect();
+    assert!(!handle_zones.is_empty(), "expected handle zones");
+    let h = handle_zones[0];
+
+    // A handle inherits the parent's identity (space ownership) path...
+    assert!(
+        h.paths
+            .iter()
+            .any(|p| matches!(p.purpose, ProofPurpose::SpaceUtxo)),
+        "handle should inherit the parent space ownership path"
+    );
+    // ...carries its own epoch commitment linking to the handles root...
+    assert!(
+        h.paths
+            .iter()
+            .any(|p| matches!(p.purpose, ProofPurpose::Commitment)
+                && matches!(p.provides_root, Some(TreeKind::HandlesRoot))),
+        "handle should have an epoch commitment providing the handles root"
+    );
+    // ...and its own handles-tree inclusion/exclusion path.
+    assert!(
+        h.paths
+            .iter()
+            .any(|p| matches!(p.tree, TreeKind::HandlesRoot))
+    );
+
+    // Parent is on-chain → Sovereign, and its bundle carried a ZK receipt
+    // (kitchen_sink commits a pending epoch), so the receipt block decodes.
+    assert!(matches!(
+        parent.sovereignty,
+        Some(SovereigntyState::Sovereign)
+    ));
+    let receipt = parent.receipt.as_ref().expect("parent receipt block");
+    assert!(
+        receipt.policy_ok,
+        "receipt policy IDs should match this build"
+    );
+    assert!(matches!(receipt.kind.as_str(), "fold" | "step"));
+
+    // Every handle zone reports a sovereignty, and kitchen_sink stages
+    // temporary (Dependent) handles.
+    assert!(handle_zones.iter().all(|z| z.sovereignty.is_some()));
+    assert!(
+        handle_zones
+            .iter()
+            .any(|z| matches!(z.sovereignty, Some(SovereigntyState::Dependent))),
+        "expected at least one dependent (temporary) handle"
+    );
+
+    // Every path resolves to a concrete state (no field left unset).
+    for z in &report.zones {
+        for p in &z.paths {
+            use libveritas::inspect::Resolution;
+            assert!(matches!(
+                p.resolution,
+                Resolution::Included | Resolution::ProvablyExcluded | Resolution::Incomplete
+            ));
+        }
+    }
+
+    // Sibling hashes must be 32 bytes.
+    for z in &report.zones {
+        for p in &z.paths {
+            for s in &p.steps {
+                assert_eq!(s.sibling_hash.len(), 32);
+            }
+        }
+    }
+
+    // The JSON shape should round-trip through serde_json without panicking.
+    let json = serde_json::to_string(&report).expect("serialize");
+    assert!(json.contains("\"spaces_root\""));
+    assert!(json.contains("\"steps\""));
 }

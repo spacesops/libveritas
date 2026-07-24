@@ -62,9 +62,10 @@ impl CertificateChain {
         buf.extend_from_slice(CHAIN_MAGIC);
         buf.push(CHAIN_VERSION);
         let subject_bytes = self.subject.to_bytes();
-        buf.push(subject_bytes.len() as u8);
+        let subject_len = u8::try_from(subject_bytes.len()).expect("subject length fits in u8");
+        buf.push(subject_len);
         buf.extend_from_slice(subject_bytes);
-        let count = self.certs.len() as u16;
+        let count = u16::try_from(self.certs.len()).expect("certificate count fits in u16");
         buf.extend_from_slice(&count.to_le_bytes());
         for cert in &self.certs {
             let cert_bytes = cert.to_bytes();
@@ -124,6 +125,12 @@ impl CertificateChain {
             let cert = Certificate::from_slice(&bytes[offset..offset + len])?;
             certs.push(cert);
             offset += len;
+        }
+        if offset != bytes.len() {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "trailing data after certificate chain",
+            ));
         }
         Ok(Self { subject, certs })
     }
@@ -504,6 +511,15 @@ impl HandleSubtree {
 
     pub fn inner(&mut self) -> &mut SubTree<Sha256Hasher> {
         &mut self.0
+    }
+
+    /// Whether the subtree provably contains a handle with this name,
+    /// regardless of which genesis script pubkey it is bound to.
+    /// Use this for exclusion proofs — a name bound to a different key
+    /// is still taken.
+    pub fn contains_name(&self, label: &Subname) -> Result<bool, SubtreeError> {
+        let key = Sha256Hasher::hash(label.as_slabel().as_ref());
+        Ok(self.0.contains(&key)?)
     }
 
     pub fn contains_subspace(

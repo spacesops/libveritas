@@ -15,6 +15,7 @@
     "android",
     "SpacesopsReactNativeLibveritasFramework.xcframework",
     "*.podspec",
+    "*.xcframework",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",

@@ -1,0 +1,19 @@
+{
+  "name": "@spacesprotocol/libveritas-inspector",
+  "version": "0.1.0",
+  "description": "Visualizer for libveritas InspectReport — draws the trust path from a handle up to its Bitcoin anchor.",
+  "type": "module",
+  "main": "visualizer.js",
+  "exports": {
+    ".": "./visualizer.js",
+    "./style.css": "./style.css"
+  },
+  "files": [
+    "visualizer.js",
+    "style.css",
+    "README.md"
+  ],
+  "scripts": {
+    "serve": "python3 -m http.server 8080"
+  }
+}

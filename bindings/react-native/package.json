@@ -14,7 +14,7 @@
     "ios",
     "android",
     "*.podspec",
-    "*.xcframework",
+    "SpacesprotocolReactNativeLibveritasFramework.xcframework",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",

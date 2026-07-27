@@ -20,6 +20,8 @@
 //!
 //! - `elf` — embed the prover ELF binaries (`FOLD_ELF`, `STEP_ELF`) alongside
 //!   the image IDs. Verifiers only need the image IDs and can skip this feature.
+//! - `inspect` — proof-path inspection for offline visualizers (the `inspect`
+//!   module). Off by default; adds no code to verifier builds.
 
 use crate::cert::{Certificate, KeyHash, Signature, Witness};
 use borsh::{BorshDeserialize, BorshSerialize};

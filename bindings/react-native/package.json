@@ -23,6 +23,7 @@
   "scripts": {
     "ubrn:ios": "ubrn build ios --and-generate",
     "ubrn:android": "ubrn build android --and-generate",
+    "build:binaries": "yarn ubrn:ios --release && yarn ubrn:android --release",
     "ubrn:clean": "ubrn clean",
     "prepare": "bob build",
     "typecheck": "tsc --noEmit"

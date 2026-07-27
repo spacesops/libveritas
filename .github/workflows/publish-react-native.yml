@@ -43,11 +43,11 @@ jobs:
 
       - name: Build iOS bindings
         working-directory: bindings/react-native
-        run: yarn ubrn:ios
+        run: yarn ubrn:ios --release
 
       - name: Build Android bindings
         working-directory: bindings/react-native
-        run: yarn ubrn:android
+        run: yarn ubrn:android --release
 
       - name: Set version from tag
         working-directory: bindings/react-native

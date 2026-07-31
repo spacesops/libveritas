@@ -15,7 +15,7 @@
     "android",
     "SpacesopsReactNativeLibveritasFramework.xcframework",
     "*.podspec",
-    "*.xcframework",
+    "SpacesprotocolReactNativeLibveritasFramework.xcframework",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",
@@ -25,6 +25,7 @@
   "scripts": {
     "ubrn:ios": "ubrn build ios --and-generate",
     "ubrn:android": "ubrn build android --and-generate",
+    "build:binaries": "yarn ubrn:ios --release && yarn ubrn:android --release",
     "ubrn:clean": "ubrn clean",
     "build:binaries": "yarn ubrn:ios --release && yarn ubrn:android --release",
     "prepare": "bob build",

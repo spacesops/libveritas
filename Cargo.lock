@@ -1505,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "libveritas"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "base64 0.22.1",
  "bitcoin",
@@ -1525,7 +1525,7 @@ dependencies = [
 
 [[package]]
 name = "libveritas-python"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "libveritas-uniffi",
  "uniffi",
@@ -1533,7 +1533,7 @@ dependencies = [
 
 [[package]]
 name = "libveritas-uniffi"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "libveritas",
  "serde",
@@ -1547,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "libveritas-wasm"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "js-sys",
  "libveritas",
@@ -1568,7 +1568,7 @@ dependencies = [
 
 [[package]]
 name = "libveritas_testutil"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "base64 0.22.1",
  "bitcoin",
